@@ -1,4 +1,4 @@
-# Organization
+# Organization + Future plans
 
 ## 1. ***PURPOSE***
 - Lightweight TUI music player + library manager (playlists and such)
@@ -6,10 +6,14 @@
 - Not necessarily meant for remote usage, oriented for people with simple
   workflows / needs.
 
+---
+
 ## 2. ***AUDIO BACKEND***
 - Audio library: implementation for it, not a wrapper ideally
 - Local-files only, no streaming
 - Playlist system, but considering queues at the moment
+
+---
 
 ## 3. ***DATA MODEL***
 - Elements:
@@ -21,12 +25,16 @@
 - Caching for entire playlists and song metadata, editing on the fly
 - Resizable song pool to build playlists from
 
+---
+
 ## 4. ***APPLICATION STATE***
 - Multiple-server + multiple-frontends architecture
 - Spin up single server on single folders (kinda like doing a single playlist) vs.
   using the entire library (user-defined dirs)
 - Clients get the playback state for the specific server they're connecting to
 - Modal navigation for the front-ends: keyboard-driven
+
+---
 
 ## 5. ***KEYBINDINGS & SETTINGS***
 - Vim-based
@@ -35,7 +43,9 @@
 - Config file for all settings (TOML probably)
 - Theming extensibility
 
-## 6. ***LAYOUT***
+---
+
+## 6. ***FUTURE LAYOUT***
 
 ```
 presto/
@@ -56,6 +66,8 @@ presto/
 └── Cargo.toml (workspace)
 ```
 
+---
+
 ## 7. ***SERVER LIFECYCLE (PERSISTENT)***
 
 ```
@@ -68,6 +80,3 @@ presto-server
   ├─ start IPC listener
   └─ idle
 ```
-
-## 8. MVPs
-

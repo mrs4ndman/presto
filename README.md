@@ -20,3 +20,5 @@ Start with [docs/README.md](docs/README.md).
 - [ ] Add a proper “Now Playing” line + elapsed time (requires tracking start time / sink position).
 - [ ] Emit MPRIS PropertiesChanged so status/metadata updates push instantly.
 - [ ] Improve filtering to fuzzy-match + highlight matches in the list.
+- [ ] Full `playerctl` interface compliance
+- [ ] Implement test coverage
