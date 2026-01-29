@@ -5,4 +5,9 @@ edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
+ratatui = "0.30.0"
 rodio = "0.21.1"
+walkdir = "2.5.0"
+async-io = "2.6.0"
+zbus = { version = "4.4.0", default-features = true }
+zvariant = "4.2.0"
