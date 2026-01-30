@@ -22,3 +22,5 @@ Start with [docs/README.md](docs/README.md).
 - [ ] Improve filtering to fuzzy-match + highlight matches in the list.
 - [ ] Full `playerctl` interface compliance
 - [ ] Implement test coverage
+- [ ] Bug: desynchronization between current-playing and highlighted song
+  (next/prev should relocate the highlighted line)

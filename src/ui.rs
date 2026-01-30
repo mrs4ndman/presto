@@ -17,7 +17,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         ])
         .split(frame.area());
 
-    let title = Block::default().title("Presto 🎵").borders(Borders::ALL);
+    let title = Block::default().title("> presto <").borders(Borders::ALL);
     frame.render_widget(title, chunks[0]);
 
     let filtered = app.filtered_indices();
@@ -27,16 +27,19 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Tracks"))
+        .block(Block::default().borders(Borders::ALL).title(" Tracks "))
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol("> ");
 
     let mut state = app_state(app);
     frame.render_stateful_widget(list, chunks[1], &mut state);
 
+    let controls = "[j/k] move • [enter] play selected song • [p] play/pause • [n/b] next/prev • [/] filter • [q] quit";
+
     let footer_text = if app.filter_mode || !app.filter_query.is_empty() {
         format!(
-            "j/k move • enter play • p pause • n/b next/prev • / filter • q quit\nfilter: {}{}",
+            "{}\nfilter: {}{}",
+            controls,
             app.filter_query,
             if app.filter_mode {
                 " (type, backspace, esc clears)"
@@ -45,7 +48,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             }
         )
     } else {
-        "j/k move • enter play • p pause • n/b next/prev • / filter • q quit".to_string()
+        controls.to_string()
     };
 
     let footer = Paragraph::new(footer_text)
