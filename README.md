@@ -24,3 +24,8 @@ Start with [docs/README.md](docs/README.md).
 - [ ] Implement test coverage
 - [ ] Bug: desynchronization between current-playing and highlighted song
   (next/prev should relocate the highlighted line)
+
+## ↓ Current status ↓
+
+https://github.com/user-attachments/assets/64471b41-b747-4d18-b7c4-b17f0e670bba
+
