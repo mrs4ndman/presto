@@ -17,15 +17,17 @@ A simple music player TUI written in Rust.
 Start with [docs/README.md](docs/README.md).
 
 ## TODO:
-- [ ] Add a proper “Now Playing” line + elapsed time (requires tracking start time / sink position).
-- [ ] Emit MPRIS PropertiesChanged so status/metadata updates push instantly.
-- [ ] Improve filtering to fuzzy-match + highlight matches in the list.
-- [ ] Full `playerctl` interface compliance
-- [ ] Implement test coverage
-- [ ] Bug: desynchronization between current-playing and highlighted song
+- [x] Add a proper “Now Playing” line + elapsed time (requires tracking start time / sink position).
+- [x] Emit MPRIS PropertiesChanged so status/metadata updates push instantly.
+- [x] Improve filtering to fuzzy-match + highlight matches in the list.
+- [x] Implement test coverage
+- [x] Bug: desynchronization between current-playing and highlighted song
   (next/prev should relocate the highlighted line)
+- [ ] Full `playerctl` interface compliance
+- [ ] Add `gg`/`G` to jump to top/bottom of track list
+- [ ] Wrap status text in the UI
+- [ ] Reorganize keybinds to be more vim-like
 
 ## ↓ Current status ↓
 
 https://github.com/user-attachments/assets/64471b41-b747-4d18-b7c4-b17f0e670bba
-

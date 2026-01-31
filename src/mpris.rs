@@ -26,18 +26,21 @@ struct SharedState {
 
 pub struct MprisHandle {
     state: Arc<Mutex<SharedState>>,
+    notify: std::sync::mpsc::Sender<()>,
 }
 
 impl MprisHandle {
     pub fn set_playback(&self, playback: PlaybackState) {
         if let Ok(mut s) = self.state.lock() {
             s.playback = playback;
+            let _ = self.notify.send(());
         }
     }
 
     pub fn set_title(&self, title: Option<String>) {
         if let Ok(mut s) = self.state.lock() {
             s.title = title;
+            let _ = self.notify.send(());
         }
     }
 }
@@ -178,6 +181,7 @@ impl PlayerIface {
 
 pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
     let state = Arc::new(Mutex::new(SharedState::default()));
+    let (notify_tx, notify_rx) = std::sync::mpsc::channel::<()>();
 
     let state_for_thread = state.clone();
     std::thread::spawn(move || {
@@ -211,8 +215,8 @@ pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
                 .at(
                     path,
                     PlayerIface {
-                        tx,
-                        state: state_for_thread,
+                        tx: tx.clone(),
+                        state: state_for_thread.clone(),
                     },
                 )
                 .await
@@ -221,12 +225,63 @@ pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
                 return;
             }
 
-            // Keep the service alive.
+            // Listen for notifications and emit PropertiesChanged when requested.
             loop {
-                Timer::after(std::time::Duration::from_secs(3600)).await;
+                // Check for notifications with a short timeout so we stay responsive.
+                if let Ok(_) = notify_rx.try_recv() {
+                    // Build changed properties map.
+                    let mut changed: HashMap<String, OwnedValue> = HashMap::new();
+
+                    let title = state_for_thread
+                        .lock()
+                        .ok()
+                        .and_then(|s| s.title.clone())
+                        .unwrap_or_else(|| "".to_string());
+
+                    let playback_status = state_for_thread
+                        .lock()
+                        .ok()
+                        .map(|s| match s.playback {
+                            PlaybackState::Stopped => "Stopped".to_string(),
+                            PlaybackState::Playing => "Playing".to_string(),
+                            PlaybackState::Paused => "Paused".to_string(),
+                        })
+                        .unwrap_or_else(|| "Stopped".to_string());
+
+                    if let Ok(val) = OwnedValue::try_from(Value::from(playback_status)) {
+                        changed.insert("PlaybackStatus".to_string(), val);
+                    }
+
+                    // Build Metadata dictionary similar to the `metadata()` property.
+                    let mut meta_map: HashMap<String, Value> = HashMap::new();
+                    meta_map.insert("xesam:title".to_string(), Value::from(title));
+                    if let Ok(meta_val) = OwnedValue::try_from(Value::from(meta_map)) {
+                        changed.insert("Metadata".to_string(), meta_val);
+                    }
+
+                    // Emit PropertiesChanged on the well-known Properties interface.
+                    let _ = connection
+                        .emit_signal(
+                            None::<&str>,
+                            path,
+                            "org.freedesktop.DBus.Properties",
+                            "PropertiesChanged",
+                            &(
+                                "org.mpris.MediaPlayer2.Player".to_string(),
+                                changed,
+                                Vec::<String>::new(),
+                            ),
+                        )
+                        .await;
+                }
+
+                Timer::after(std::time::Duration::from_millis(250)).await;
             }
         });
     });
 
-    MprisHandle { state }
+    MprisHandle {
+        state,
+        notify: notify_tx,
+    }
 }
