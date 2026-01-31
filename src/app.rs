@@ -14,6 +14,17 @@ mod tests {
     use crate::audio::OrderHandle;
     use std::sync::{Arc, Mutex};
 
+    fn t(title: &str) -> Track {
+        Track {
+            path: std::path::PathBuf::new(),
+            title: title.into(),
+            artist: None,
+            album: None,
+            duration: None,
+            display: title.into(),
+        }
+    }
+
     #[test]
     fn fuzzy_match_simple() {
         let title = "Hello World";
@@ -23,47 +34,17 @@ mod tests {
     }
 
     #[test]
-    fn filtered_indices_respects_query() {
-        let tracks = vec![
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Alpha".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Beta".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Gamma".into(),
-            },
-        ];
+    fn display_indices_respects_filter_query() {
+        let tracks = vec![t("Alpha"), t("Beta"), t("Gamma")];
         let mut app = App::new(tracks);
         app.push_filter_char('a');
-        let filtered = app.filtered_indices();
-        assert!(!filtered.is_empty());
+        let visible = app.display_indices();
+        assert!(!visible.is_empty());
     }
 
     #[test]
     fn display_indices_respects_order_and_filter() {
-        let tracks = vec![
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Alpha".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Beta".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Gamma".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Delta".into(),
-            },
-        ];
+        let tracks = vec![t("Alpha"), t("Beta"), t("Gamma"), t("Delta")];
 
         let mut app = App::new(tracks);
         // custom order: 2,0,3,1
@@ -83,16 +64,7 @@ mod tests {
 
     #[test]
     fn display_indices_uses_fuzzy_not_substring_only() {
-        let tracks = vec![
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Metallica - Blackened".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Black Sabbath - Paranoid".into(),
-            },
-        ];
+        let tracks = vec![t("Metallica - Blackened"), t("Black Sabbath - Paranoid")];
 
         let mut app = App::new(tracks);
         // Fuzzy query: letters appear in order but not necessarily contiguously
@@ -104,10 +76,7 @@ mod tests {
 
     #[test]
     fn trimming_filter_query_affects_matching() {
-        let tracks = vec![Track {
-            path: std::path::PathBuf::new(),
-            title: "Black Sabbath - Paranoid".into(),
-        }];
+        let tracks = vec![t("Black Sabbath - Paranoid")];
 
         let mut app = App::new(tracks);
         app.filter_query = "Black ".into();
@@ -119,20 +88,7 @@ mod tests {
 
     #[test]
     fn next_prev_in_view_helpers_work() {
-        let tracks = vec![
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Alpha".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Beta".into(),
-            },
-            Track {
-                path: std::path::PathBuf::new(),
-                title: "Gamma".into(),
-            },
-        ];
+        let tracks = vec![t("Alpha"), t("Beta"), t("Gamma")];
 
         let mut app = App::new(tracks);
         app.filter_query = "et".into(); // only Beta is visible
@@ -145,10 +101,7 @@ mod tests {
 
     #[test]
     fn cycle_loop_mode_cycles_three_states() {
-        let tracks = vec![Track {
-            path: std::path::PathBuf::new(),
-            title: "A".into(),
-        }];
+        let tracks = vec![t("A")];
 
         let mut app = App::new(tracks);
         assert_eq!(app.loop_mode, crate::audio::LoopMode::NoLoop);
@@ -165,10 +118,7 @@ mod tests {
 
     #[test]
     fn queue_dirty_is_set_on_filter_changes() {
-        let tracks = vec![Track {
-            path: std::path::PathBuf::new(),
-            title: "Alpha".into(),
-        }];
+        let tracks = vec![t("Alpha")];
 
         let mut app = App::new(tracks);
         // new() starts dirty so initial queue can be synced
@@ -196,6 +146,8 @@ pub struct App {
     pub playback: PlaybackState,
     pub playback_handle: Option<PlaybackHandle>,
 
+    lower_titles: Option<Vec<String>>,
+
     pub follow_playback: bool,
     pub pending_follow_index: Option<usize>,
 
@@ -211,11 +163,26 @@ pub struct App {
 
 impl App {
     pub fn new(tracks: Vec<Track>) -> Self {
+        // Optimization: for larger libraries, precompute lowercase titles to speed up fuzzy
+        // filtering (avoid per-char lowercase conversions on every redraw/keystroke).
+        let lower_titles = if tracks.len() > 100 {
+            Some(
+                tracks
+                    .iter()
+                    .map(|t| t.display.to_ascii_lowercase())
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
         Self {
             tracks,
             selected: 0,
             playback: PlaybackState::Stopped,
             playback_handle: None,
+
+            lower_titles,
 
             follow_playback: true,
             pending_follow_index: None,
@@ -296,9 +263,44 @@ impl App {
         if query.is_empty() {
             base
         } else {
-            base.into_iter()
-                .filter(|&i| Self::fuzzy_match_positions(&self.tracks[i].title, query).is_some())
-                .collect()
+            match self.lower_titles.as_deref() {
+                Some(lower_titles) => {
+                    let query_lower = query.to_ascii_lowercase();
+                    base.into_iter()
+                        .filter(|&i| {
+                            Self::fuzzy_match_positions_lower(&lower_titles[i], &query_lower)
+                                .is_some()
+                        })
+                        .collect()
+                }
+                None => base
+                    .into_iter()
+                    .filter(|&i| {
+                        Self::fuzzy_match_positions(&self.tracks[i].display, query).is_some()
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    pub fn uses_lower_titles(&self) -> bool {
+        self.lower_titles.is_some()
+    }
+
+    pub fn fuzzy_match_positions_for_track_lower(
+        &self,
+        track_index: usize,
+        query_lower: &str,
+    ) -> Option<Vec<usize>> {
+        if query_lower.is_empty() {
+            return Some(Vec::new());
+        }
+
+        match self.lower_titles.as_deref() {
+            Some(lower_titles) => {
+                Self::fuzzy_match_positions_lower(&lower_titles[track_index], query_lower)
+            }
+            None => Self::fuzzy_match_positions(&self.tracks[track_index].display, query_lower),
         }
     }
 
@@ -343,28 +345,6 @@ impl App {
         !self.tracks.is_empty()
     }
 
-    pub fn filtered_indices(&self) -> Vec<usize> {
-        if self.tracks.is_empty() {
-            return Vec::new();
-        }
-
-        let query = self.filter_query.trim();
-        if query.is_empty() {
-            return (0..self.tracks.len()).collect();
-        }
-        self.tracks
-            .iter()
-            .enumerate()
-            .filter_map(|(i, t)| {
-                if Self::fuzzy_match_positions(&t.title, query).is_some() {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
     // Fuzzy/subsequence match: return the character positions (by char index)
     // in `title` that match the query, or None if not matched.
     pub fn fuzzy_match_positions(title: &str, query: &str) -> Option<Vec<usize>> {
@@ -372,26 +352,44 @@ impl App {
             return Some(Vec::new());
         }
 
-        let t_chars: Vec<char> = title.chars().collect();
-        let q_chars: Vec<char> = query.chars().collect();
+        let mut positions: Vec<usize> = Vec::new();
+        let mut title_iter = title.chars().enumerate();
+
+        for qc in query.chars() {
+            let qc_low = qc.to_ascii_lowercase();
+            loop {
+                match title_iter.next() {
+                    Some((ti, tc)) if tc.to_ascii_lowercase() == qc_low => {
+                        positions.push(ti);
+                        break;
+                    }
+                    Some(_) => continue,
+                    None => return None,
+                }
+            }
+        }
+
+        Some(positions)
+    }
+
+    fn fuzzy_match_positions_lower(title_lower: &str, query_lower: &str) -> Option<Vec<usize>> {
+        if query_lower.is_empty() {
+            return Some(Vec::new());
+        }
 
         let mut positions: Vec<usize> = Vec::new();
-        let mut ti = 0usize;
+        let mut title_iter = title_lower.chars().enumerate();
 
-        for &qc in &q_chars {
-            let qc_low = qc.to_ascii_lowercase();
-            let mut found = false;
-            while ti < t_chars.len() {
-                if t_chars[ti].to_ascii_lowercase() == qc_low {
-                    positions.push(ti);
-                    ti += 1;
-                    found = true;
-                    break;
+        for qc in query_lower.chars() {
+            loop {
+                match title_iter.next() {
+                    Some((ti, tc)) if tc == qc => {
+                        positions.push(ti);
+                        break;
+                    }
+                    Some(_) => continue,
+                    None => return None,
                 }
-                ti += 1;
-            }
-            if !found {
-                return None;
             }
         }
 
@@ -442,30 +440,14 @@ impl App {
     }
 
     pub fn next(&mut self) {
-        let display = self.display_indices();
-        if display.is_empty() {
-            return;
+        if let Some(next) = self.next_in_view_from(self.selected) {
+            self.selected = next;
         }
-
-        let pos = display
-            .iter()
-            .position(|&i| i == self.selected)
-            .unwrap_or(0);
-        let next_pos = (pos + 1) % display.len();
-        self.selected = display[next_pos];
     }
 
     pub fn prev(&mut self) {
-        let display = self.display_indices();
-        if display.is_empty() {
-            return;
+        if let Some(prev) = self.prev_in_view_from(self.selected) {
+            self.selected = prev;
         }
-
-        let pos = display
-            .iter()
-            .position(|&i| i == self.selected)
-            .unwrap_or(0);
-        let prev_pos = if pos == 0 { display.len() - 1 } else { pos - 1 };
-        self.selected = display[prev_pos];
     }
 }

@@ -25,4 +25,14 @@ In another terminal:
   - request the MPRIS name
   - register `org.mpris.MediaPlayer2` and `org.mpris.MediaPlayer2.Player` interfaces
 
-Presto does not yet emit `PropertiesChanged` signals; status/metadata is still readable on demand via `playerctl`.
+Presto emits `PropertiesChanged` signals; `playerctl` should update instantly on:
+- track changes (UI actions, media keys, auto-advance)
+- play/pause changes
+
+Metadata currently includes:
+- `xesam:title`
+- `xesam:artist` (when available)
+- `xesam:album` (when available)
+- `xesam:url` (file path)
+- `mpris:length` (microseconds, when duration is available)
+- `mpris:trackid`

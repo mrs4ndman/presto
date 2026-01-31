@@ -6,15 +6,17 @@
 
 ## Playback
 - `Enter`: play selected track
-- `p`: play/pause (same as MPRIS PlayPause)
-- `n`: next
-- `b`: previous
+- `Space` / `p`: play/pause (same as MPRIS PlayPause)
+- `l`: next
+- `h`: previous
+- `r`: cycle loop mode
+- `s`: toggle shuffle
 - `q`: quit
 
 ## Filtering (search)
 - `/`: enter filter mode
 - While in filter mode:
-  - type to filter track titles (substring match, case-insensitive)
+  - type to filter track titles (fuzzy/subsequence match, case-insensitive)
   - `Backspace`: delete last character
   - `Esc`: clear filter and exit filter mode
   - `Enter`: play selected match and exit filter mode

@@ -48,6 +48,48 @@ pub struct AudioPlayer {
     order: OrderHandle,
 }
 
+fn reorder_queue_in_place(
+    queue: &mut Vec<usize>,
+    tracks_len: usize,
+    shuffle: bool,
+    order: &[usize],
+) {
+    queue.retain(|&i| i < tracks_len);
+    if !shuffle {
+        queue.sort_unstable();
+        return;
+    }
+
+    let mut pos_map = vec![usize::MAX; tracks_len];
+    for (p, &ti) in order.iter().enumerate() {
+        if ti < pos_map.len() {
+            pos_map[ti] = p;
+        }
+    }
+    queue.sort_by_key(|&ti| pos_map.get(ti).copied().unwrap_or(usize::MAX));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reorder_queue_unshuffled_sorts_and_filters() {
+        let mut q = vec![5, 2, 999, 2, 0];
+        reorder_queue_in_place(&mut q, 6, false, &[]);
+        assert_eq!(q, vec![0, 2, 2, 5]);
+    }
+
+    #[test]
+    fn reorder_queue_shuffled_follows_order_positions() {
+        // order position: 3->0, 1->1, 0->2, 2->3
+        let order = vec![3, 1, 0, 2];
+        let mut q = vec![0, 3, 2];
+        reorder_queue_in_place(&mut q, 4, true, &order);
+        assert_eq!(q, vec![3, 0, 2]);
+    }
+}
+
 impl AudioPlayer {
     pub fn playback_handle(&self) -> PlaybackHandle {
         self.playback.clone()
@@ -279,6 +321,20 @@ impl AudioPlayer {
                                     order_pos = pos;
                                 }
                             }
+
+                            // Keep the actual playback queue in sync with shuffle state.
+                            // We do NOT change queue membership here (that is controlled via SetQueue);
+                            // we only reorder the existing queue to match the current shuffled/unshuffled order.
+                            if !queue.is_empty() {
+                                let current = index;
+                                reorder_queue_in_place(&mut queue, tracks.len(), shuffle, &order);
+
+                                if let Some(i) = current {
+                                    queue_pos = queue.iter().position(|&x| x == i).unwrap_or(0);
+                                } else {
+                                    queue_pos = 0;
+                                }
+                            }
                         }
 
                         AudioCmd::SetQueue(mut new_queue) => {
@@ -286,6 +342,13 @@ impl AudioPlayer {
                             // just store it; auto-advance/next/prev will become no-ops.
                             // Keep it sane by removing out-of-range indices.
                             new_queue.retain(|&i| i < tracks.len());
+
+                            // IMPORTANT: always order the queue according to the audio thread's
+                            // current shuffle order. This prevents a race where the UI computes
+                            // display_indices() using a stale order_handle immediately after
+                            // toggling shuffle and then overwrites the correct shuffled queue.
+                            reorder_queue_in_place(&mut new_queue, tracks.len(), shuffle, &order);
+
                             queue = new_queue;
                             if let Some(i) = index {
                                 if let Some(pos) = queue.iter().position(|&x| x == i) {

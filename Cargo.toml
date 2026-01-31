@@ -12,3 +12,7 @@ async-io = "2.6.0"
 zbus = { version = "4.4.0", default-features = true }
 zvariant = "4.2.0"
 rand = "0.8"
+lofty = "0.18"
+
+[dev-dependencies]
+tempfile = "3"

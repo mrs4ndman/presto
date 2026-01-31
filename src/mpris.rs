@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex, mpsc::Sender};
 
 use async_io::{Timer, block_on};
 use zbus::{Connection, interface};
-use zvariant::{OwnedValue, Value};
+use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::app::PlaybackState;
+use crate::library::Track;
 
 #[derive(Clone, Debug)]
 pub enum ControlCmd {
@@ -22,6 +23,11 @@ pub enum ControlCmd {
 struct SharedState {
     playback: PlaybackState,
     title: Option<String>,
+    artist: Vec<String>,
+    album: Option<String>,
+    url: Option<String>,
+    length_micros: Option<i64>,
+    track_id: Option<ObjectPath<'static>>,
 }
 
 pub struct MprisHandle {
@@ -37,9 +43,29 @@ impl MprisHandle {
         }
     }
 
-    pub fn set_title(&self, title: Option<String>) {
+    pub fn set_track_metadata(&self, idx: Option<usize>, track: Option<&Track>) {
         if let Ok(mut s) = self.state.lock() {
-            s.title = title;
+            if let Some(t) = track {
+                s.title = Some(t.title.clone());
+                s.artist = t.artist.clone().into_iter().collect();
+                s.album = t.album.clone();
+                s.url = Some(t.path.to_string_lossy().to_string());
+                s.length_micros = t
+                    .duration
+                    .map(|d| (d.as_micros().min(i64::MAX as u128)) as i64);
+                s.track_id = idx
+                    .and_then(|i| {
+                        ObjectPath::try_from(format!("/org/mpris/MediaPlayer2/track/{i}")).ok()
+                    })
+                    .map(|p| p.to_owned());
+            } else {
+                s.title = None;
+                s.artist.clear();
+                s.album = None;
+                s.url = None;
+                s.length_micros = None;
+                s.track_id = None;
+            }
             let _ = self.notify.send(());
         }
     }
@@ -161,20 +187,48 @@ impl PlayerIface {
 
     #[zbus(property)]
     fn metadata(&self) -> HashMap<String, OwnedValue> {
-        // Minimal metadata so `playerctl metadata` shows something.
+        // Minimal-but-useful metadata so `playerctl metadata` shows something.
         let mut map = HashMap::new();
-        let title = self
-            .state
-            .lock()
-            .ok()
-            .and_then(|s| s.title.clone())
-            .unwrap_or_else(|| "".to_string());
 
-        let title_value = OwnedValue::try_from(Value::from(title)).unwrap_or_else(|_| {
-            OwnedValue::try_from(Value::from(String::new())).expect("OwnedValue conversion")
-        });
+        let Ok(s) = self.state.lock() else {
+            return map;
+        };
 
-        map.insert("xesam:title".to_string(), title_value);
+        if let Some(track_id) = s.track_id.clone() {
+            if let Ok(v) = OwnedValue::try_from(Value::from(track_id)) {
+                map.insert("mpris:trackid".to_string(), v);
+            }
+        }
+
+        let title = s.title.clone().unwrap_or_default();
+        if let Ok(v) = OwnedValue::try_from(Value::from(title)) {
+            map.insert("xesam:title".to_string(), v);
+        }
+
+        if !s.artist.is_empty() {
+            if let Ok(v) = OwnedValue::try_from(Value::from(s.artist.clone())) {
+                map.insert("xesam:artist".to_string(), v);
+            }
+        }
+
+        if let Some(album) = s.album.clone() {
+            if let Ok(v) = OwnedValue::try_from(Value::from(album)) {
+                map.insert("xesam:album".to_string(), v);
+            }
+        }
+
+        if let Some(url) = s.url.clone() {
+            if let Ok(v) = OwnedValue::try_from(Value::from(url)) {
+                map.insert("xesam:url".to_string(), v);
+            }
+        }
+
+        if let Some(len) = s.length_micros {
+            if let Ok(v) = OwnedValue::try_from(Value::from(len)) {
+                map.insert("mpris:length".to_string(), v);
+            }
+        }
+
         map
     }
 }
@@ -232,21 +286,36 @@ pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
                     // Build changed properties map.
                     let mut changed: HashMap<String, OwnedValue> = HashMap::new();
 
-                    let title = state_for_thread
-                        .lock()
-                        .ok()
-                        .and_then(|s| s.title.clone())
-                        .unwrap_or_else(|| "".to_string());
-
-                    let playback_status = state_for_thread
-                        .lock()
-                        .ok()
-                        .map(|s| match s.playback {
-                            PlaybackState::Stopped => "Stopped".to_string(),
-                            PlaybackState::Playing => "Playing".to_string(),
-                            PlaybackState::Paused => "Paused".to_string(),
-                        })
-                        .unwrap_or_else(|| "Stopped".to_string());
+                    let (title, artist, album, url, length_micros, track_id, playback_status) =
+                        state_for_thread
+                            .lock()
+                            .ok()
+                            .map(|s| {
+                                (
+                                    s.title.clone().unwrap_or_default(),
+                                    s.artist.clone(),
+                                    s.album.clone(),
+                                    s.url.clone(),
+                                    s.length_micros,
+                                    s.track_id.clone(),
+                                    match s.playback {
+                                        PlaybackState::Stopped => "Stopped".to_string(),
+                                        PlaybackState::Playing => "Playing".to_string(),
+                                        PlaybackState::Paused => "Paused".to_string(),
+                                    },
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                (
+                                    String::new(),
+                                    Vec::new(),
+                                    None,
+                                    None,
+                                    None,
+                                    None,
+                                    "Stopped".to_string(),
+                                )
+                            });
 
                     if let Ok(val) = OwnedValue::try_from(Value::from(playback_status)) {
                         changed.insert("PlaybackStatus".to_string(), val);
@@ -255,6 +324,21 @@ pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
                     // Build Metadata dictionary similar to the `metadata()` property.
                     let mut meta_map: HashMap<String, Value> = HashMap::new();
                     meta_map.insert("xesam:title".to_string(), Value::from(title));
+                    if !artist.is_empty() {
+                        meta_map.insert("xesam:artist".to_string(), Value::from(artist));
+                    }
+                    if let Some(album) = album {
+                        meta_map.insert("xesam:album".to_string(), Value::from(album));
+                    }
+                    if let Some(url) = url {
+                        meta_map.insert("xesam:url".to_string(), Value::from(url));
+                    }
+                    if let Some(len) = length_micros {
+                        meta_map.insert("mpris:length".to_string(), Value::from(len));
+                    }
+                    if let Some(track_id) = track_id {
+                        meta_map.insert("mpris:trackid".to_string(), Value::from(track_id));
+                    }
                     if let Ok(meta_val) = OwnedValue::try_from(Value::from(meta_map)) {
                         changed.insert("Metadata".to_string(), meta_val);
                     }
@@ -283,5 +367,123 @@ pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
     MprisHandle {
         state,
         notify: notify_tx,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    fn make_track() -> Track {
+        Track {
+            path: PathBuf::from("/tmp/music/test.mp3"),
+            title: "Test Title".to_string(),
+            artist: Some("Test Artist".to_string()),
+            album: Some("Test Album".to_string()),
+            duration: Some(Duration::from_micros(1_234_567)),
+            display: "Test Artist - Test Title".to_string(),
+        }
+    }
+
+    #[test]
+    fn set_track_metadata_sets_and_clears_shared_state() {
+        let state = Arc::new(Mutex::new(SharedState::default()));
+        let (notify_tx, _notify_rx) = mpsc::channel::<()>();
+        let handle = MprisHandle {
+            state: state.clone(),
+            notify: notify_tx,
+        };
+
+        let track = make_track();
+        handle.set_track_metadata(Some(7), Some(&track));
+
+        {
+            let s = state.lock().unwrap();
+            assert_eq!(s.title.as_deref(), Some("Test Title"));
+            assert_eq!(s.artist, vec!["Test Artist".to_string()]);
+            assert_eq!(s.album.as_deref(), Some("Test Album"));
+            assert!(s.url.as_deref().unwrap().contains("/tmp/music/test.mp3"));
+            assert_eq!(s.length_micros, Some(1_234_567));
+            assert_eq!(
+                s.track_id.as_ref().map(|p| p.as_str()),
+                Some("/org/mpris/MediaPlayer2/track/7")
+            );
+        }
+
+        handle.set_track_metadata(None, None);
+        {
+            let s = state.lock().unwrap();
+            assert_eq!(s.title, None);
+            assert!(s.artist.is_empty());
+            assert_eq!(s.album, None);
+            assert_eq!(s.url, None);
+            assert_eq!(s.length_micros, None);
+            assert!(s.track_id.is_none());
+        }
+    }
+
+    #[test]
+    fn playback_status_maps_state_to_spec_strings() {
+        let state = Arc::new(Mutex::new(SharedState::default()));
+        let (tx, _rx) = mpsc::channel::<ControlCmd>();
+        let iface = PlayerIface {
+            tx,
+            state: state.clone(),
+        };
+
+        {
+            let mut s = state.lock().unwrap();
+            s.playback = PlaybackState::Stopped;
+        }
+        assert_eq!(iface.playback_status(), "Stopped");
+
+        {
+            let mut s = state.lock().unwrap();
+            s.playback = PlaybackState::Playing;
+        }
+        assert_eq!(iface.playback_status(), "Playing");
+
+        {
+            let mut s = state.lock().unwrap();
+            s.playback = PlaybackState::Paused;
+        }
+        assert_eq!(iface.playback_status(), "Paused");
+    }
+
+    #[test]
+    fn metadata_includes_expected_keys_when_present() {
+        let state = Arc::new(Mutex::new(SharedState::default()));
+        let (tx, _rx) = mpsc::channel::<ControlCmd>();
+        let iface = PlayerIface {
+            tx,
+            state: state.clone(),
+        };
+
+        {
+            let mut s = state.lock().unwrap();
+            s.title = Some("Title".to_string());
+            s.artist = vec!["Artist".to_string()];
+            s.album = Some("Album".to_string());
+            s.url = Some("file:///tmp/test.mp3".to_string());
+            s.length_micros = Some(42);
+            s.track_id = ObjectPath::try_from("/org/mpris/MediaPlayer2/track/1")
+                .ok()
+                .map(|p| p.to_owned());
+        }
+
+        let map = iface.metadata();
+        for k in [
+            "mpris:trackid",
+            "xesam:title",
+            "xesam:artist",
+            "xesam:album",
+            "xesam:url",
+            "mpris:length",
+        ] {
+            assert!(map.contains_key(k), "missing key: {k}");
+        }
     }
 }
