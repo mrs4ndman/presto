@@ -1,10 +1,10 @@
 # presto
 
-A simple music player TUI written in Rust.
+A simple music player TUI written in Rust, with Vim-like controls.
 
 ## Features
 - Directory scan of common audio files (`mp3`, `flac`, `wav`, `ogg`)
-- Keyboard-driven TUI
+- Keyboard-driven TUI with Vim-like controls
 - `/` filter (type-to-filter track titles)
 - MPRIS integration for `playerctl` / media keys
 
@@ -29,11 +29,15 @@ Start with [docs/README.md](docs/README.md).
 - [x] Wrap status text in the UI
 - [x] Reorganize keybinds to be more vim-like
 - [ ] Song scrubbing (FF/FB)
-- [ ] ???
+- [ ] Logo
+- [ ] Crossfade
+- [ ] TBD
 
 ### Long-term
 - [x] Full `playerctl` + MPRIS interface compliance
 - [x] Extract full metadata for songs that have it available
+- [ ] Config file -> Custom rebinding of controls, theming, etc.
+- [ ] Listening stats (amount, usage, recent songs, etc.)
 
 ## ↓ Current status ↓
 
