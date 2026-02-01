@@ -4,12 +4,13 @@ use std::{
     sync::mpsc::{self, Sender},
     sync::{Arc, Mutex},
     thread,
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink};
+use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 
 use crate::library::Track;
 
@@ -39,13 +40,15 @@ pub enum AudioCmd {
     SetLoopMode(LoopMode),
     Next,
     Prev,
-    Quit,
+    Quit { fade_out_ms: u64 },
+    SeekBy(i32), // seconds, positive or negative
 }
 
 pub struct AudioPlayer {
     tx: Sender<AudioCmd>,
     playback: PlaybackHandle,
     order: OrderHandle,
+    join: Mutex<Option<JoinHandle<()>>>,
 }
 
 fn reorder_queue_in_place(
@@ -125,7 +128,7 @@ impl AudioPlayer {
         // Spawn audio thread
         let playback_info_for_thread = playback_info.clone();
         let order_handle_for_thread = order_handle.clone();
-        let _audio_handle = thread::spawn(move || {
+        let audio_handle = thread::spawn(move || {
             let stream =
                 OutputStreamBuilder::open_default_stream().expect("ERR: No audio output device");
             // rodio logs to stderr when OutputStream is dropped. That's useful in debugging,
@@ -182,12 +185,34 @@ impl AudioPlayer {
                 order: &Vec<usize>,
                 order_pos: &mut usize,
             ) {
-                if let Some(s) = sink.as_ref() {
-                    s.stop();
-                }
+                const CROSSFADE_MS: u64 = 250;
+                const CROSSFADE_STEPS: u64 = 10;
 
                 let track = &tracks[i];
-                let new_sink = create_sink(stream, track);
+                let new_sink = create_sink_at(stream, track, Duration::ZERO);
+
+                // Crossfade if currently playing a sink; otherwise just swap.
+                if let Some(old_sink) = sink.as_ref() {
+                    if !*paused {
+                        old_sink.set_volume(1.0);
+                        new_sink.set_volume(0.0);
+                        new_sink.play();
+
+                        // Fade volumes in a short blocking loop. This is simple and good enough
+                        // for a TUI player; audio continues in rodio's mixer thread.
+                        for step in 1..=CROSSFADE_STEPS {
+                            let t = (step as f32) / (CROSSFADE_STEPS as f32);
+                            old_sink.set_volume(1.0 - t);
+                            new_sink.set_volume(t);
+                            thread::sleep(Duration::from_millis(CROSSFADE_MS / CROSSFADE_STEPS));
+                        }
+
+                        old_sink.stop();
+                    } else {
+                        old_sink.stop();
+                    }
+                }
+
                 new_sink.play();
                 *sink = Some(new_sink);
                 *index = Some(i);
@@ -238,9 +263,63 @@ impl AudioPlayer {
             let _playback_info_thread = playback_info_for_thread.clone();
 
             use std::sync::mpsc::RecvTimeoutError;
+
+            fn fade_out_sink(sink: &Sink, fade_out_ms: u64) {
+                if fade_out_ms == 0 {
+                    sink.set_volume(0.0);
+                    return;
+                }
+                let steps: u64 = 20;
+                let step_ms = (fade_out_ms / steps).max(1);
+                sink.set_volume(1.0);
+                for step in 1..=steps {
+                    let t = step as f32 / steps as f32;
+                    sink.set_volume(1.0 - t);
+                    thread::sleep(Duration::from_millis(step_ms));
+                }
+                sink.set_volume(0.0);
+            }
+
             loop {
                 match rx.recv_timeout(Duration::from_millis(200)) {
                     Ok(cmd) => match cmd {
+                        AudioCmd::SeekBy(secs) => {
+                            // Scrubbing: rebuild the current sink and skip into the file.
+                            // This uses `Source::skip_duration` (works for common formats).
+                            let Some(i) = index else {
+                                continue;
+                            };
+                            if sink.is_none() {
+                                continue;
+                            }
+
+                            let elapsed =
+                                accumulated + started_at.map_or(Duration::ZERO, |st| st.elapsed());
+                            let cur = elapsed.as_secs() as i64;
+                            let new = (cur + secs as i64).max(0) as u64;
+                            let new_elapsed = Duration::from_secs(new);
+
+                            // Stop old sink and replace with a fresh one.
+                            if let Some(s) = sink.as_ref() {
+                                s.stop();
+                            }
+
+                            let track = &tracks[i];
+                            let new_sink = create_sink_at(&stream, track, new_elapsed);
+                            if paused {
+                                new_sink.pause();
+                                started_at = None;
+                            } else {
+                                new_sink.play();
+                                started_at = Some(Instant::now());
+                            }
+
+                            sink = Some(new_sink);
+                            accumulated = new_elapsed;
+                            if let Ok(mut info) = playback_info_for_thread.lock() {
+                                info.elapsed = new_elapsed;
+                            }
+                        }
                         AudioCmd::Play(i) => {
                             // Ensure queue_pos points at the played index if present.
                             if let Some(pos) = queue.iter().position(|&x| x == i) {
@@ -463,9 +542,15 @@ impl AudioPlayer {
                                 );
                             }
                         }
-                        AudioCmd::Quit => {
+                        AudioCmd::Quit { fade_out_ms } => {
                             if let Some(ref s) = sink {
+                                // Fade out gently before stopping.
+                                fade_out_sink(s, fade_out_ms);
                                 s.stop();
+                            }
+                            // Update shared state so UI/MPRIS don't keep showing Playing.
+                            if let Ok(mut info) = playback_info_for_thread.lock() {
+                                info.playing = false;
                             }
                             break;
                         }
@@ -567,6 +652,7 @@ impl AudioPlayer {
             tx,
             playback: playback_info,
             order: order_handle,
+            join: Mutex::new(Some(audio_handle)),
         }
     }
 
@@ -577,13 +663,27 @@ impl AudioPlayer {
     pub fn send(&self, cmd: AudioCmd) -> Result<(), mpsc::SendError<AudioCmd>> {
         self.tx.send(cmd)
     }
+
+    pub fn quit_softly(&self, fade_out: Duration) {
+        let _ = self.send(AudioCmd::Quit {
+            fade_out_ms: fade_out.as_millis() as u64,
+        });
+
+        if let Ok(mut j) = self.join.lock() {
+            if let Some(h) = j.take() {
+                let _ = h.join();
+            }
+        }
+    }
 }
-fn create_sink(handle: &OutputStream, track: &Track) -> Sink {
+fn create_sink_at(handle: &OutputStream, track: &Track, start_at: Duration) -> Sink {
     let file =
         File::open(&track.path).unwrap_or_else(|_| panic!("failed to open {:?}", track.path));
 
     let source = Decoder::new(BufReader::new(file))
-        .unwrap_or_else(|_| panic!("failed to decode {:?}", track.path));
+        .unwrap_or_else(|_| panic!("failed to decode {:?}", track.path))
+        // `skip_duration` is our seeking primitive; even Duration::ZERO is fine.
+        .skip_duration(start_at);
 
     let sink = Sink::connect_new(handle.mixer());
     sink.append(source);

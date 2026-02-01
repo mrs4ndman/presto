@@ -1,10 +1,10 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style, Stylize},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
-use std::{collections::BTreeMap, sync::LazyLock};
+use std::{collections::BTreeMap, sync::LazyLock, time::Duration};
 
 use crate::app::App;
 
@@ -15,22 +15,56 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map.insert("enter".to_string(), "play selected song".to_string());
     map.insert("space/p".to_string(), "play/pause".to_string());
     map.insert("h/l".to_string(), "prev/next song".to_string());
+    map.insert("H/L".to_string(), "scrub -/+5s".to_string());
     map.insert("/".to_string(), "filter".to_string());
     map.insert("s".to_string(), "shuffle".to_string());
     map.insert("r".to_string(), "loop mode".to_string());
+    map.insert("K".to_string(), "metadata".to_string());
     map.insert("q".to_string(), "quit".to_string());
     map
 });
 
 static CONTROLS_TEXT: LazyLock<String> = LazyLock::new(|| {
     // Keep the rendered order stable and human-friendly.
-    let order = ["j/k", "h/l", "enter", "space/p", "gg/G", "/", "s", "r", "q"];
+    let order = [
+        "j/k", "h/l", "H/L", "enter", "space/p", "gg/G", "K", "/", "s", "r", "q",
+    ];
     order
         .iter()
         .filter_map(|k| CONTROLS_MAP.get(*k).map(|v| format!("[{}] {}", k, v)))
         .collect::<Vec<String>>()
         .join(" | ")
 });
+
+fn centered_rect_sized(mut width: u16, mut height: u16, r: Rect) -> Rect {
+    // Keep the popup smaller and avoid covering the entire UI.
+    width = width.min(r.width.saturating_sub(2)).max(10);
+    height = height.min(r.height.saturating_sub(2)).max(5);
+
+    let x = r.x + (r.width.saturating_sub(width) / 2);
+    let y = r.y + (r.height.saturating_sub(height) / 2);
+    Rect {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+fn format_duration_mmss_ceil(d: Option<Duration>) -> String {
+    let Some(d) = d else {
+        return "-".to_string();
+    };
+
+    let mut total_secs = d.as_secs();
+    if d.subsec_nanos() > 0 {
+        total_secs = total_secs.saturating_add(1);
+    }
+
+    let minutes = total_secs / 60;
+    let seconds = total_secs % 60;
+    format!("{}:{:02} ({}s)", minutes, seconds, total_secs)
+}
 
 pub fn draw(frame: &mut Frame, app: &App, display: &[usize]) {
     let chunks = Layout::default()
@@ -136,75 +170,109 @@ pub fn draw(frame: &mut Frame, app: &App, display: &[usize]) {
         .wrap(Wrap { trim: true });
     frame.render_widget(status_par, chunks[1]);
 
-    let q = app.filter_query.trim();
-    let query_lower = if q.is_empty() {
-        None
-    } else if app.uses_lower_titles() {
-        Some(q.to_ascii_lowercase())
-    } else {
-        None
-    };
+    // Main list
+    {
+        let q = app.filter_query.trim();
+        let query_lower = if q.is_empty() {
+            None
+        } else if app.uses_lower_titles() {
+            Some(q.to_ascii_lowercase())
+        } else {
+            None
+        };
 
-    // Center the selected item when possible by creating a visible window.
-    // Important: only build ListItems for the visible window (avoid allocating the entire list).
-    let total = display.len();
-    let list_height = chunks[2].height as usize;
-    let sel_pos = display.iter().position(|&i| i == app.selected).unwrap_or(0);
-    let (start, end, selected_pos_in_visible) = if total <= list_height || list_height == 0 {
-        (0, total, sel_pos)
-    } else {
-        let half = list_height / 2;
-        let mut start = if sel_pos > half { sel_pos - half } else { 0 };
-        if start + list_height > total {
-            start = total - list_height;
-        }
-        (start, start + list_height, sel_pos - start)
-    };
-
-    let visible_items: Vec<ListItem> = display[start..end]
-        .iter()
-        .map(|&i| {
-            let title = &app.tracks[i].display;
-            if q.is_empty() {
-                ListItem::new(title.as_str())
-            } else {
-                let positions = match query_lower.as_deref() {
-                    Some(ql) => app.fuzzy_match_positions_for_track_lower(i, ql),
-                    None => App::fuzzy_match_positions(title, q),
-                };
-
-                if let Some(positions) = positions {
-                    let mut rendered = String::new();
-                    let mut pos_iter = positions.into_iter();
-                    let mut next_pos = pos_iter.next();
-
-                    for (ci, ch) in title.chars().enumerate() {
-                        if next_pos == Some(ci) {
-                            for up in ch.to_uppercase() {
-                                rendered.push(up);
-                            }
-                            next_pos = pos_iter.next();
-                        } else {
-                            rendered.push(ch);
-                        }
-                    }
-                    ListItem::new(rendered)
-                } else {
-                    ListItem::new(title.as_str())
-                }
+        // Center the selected item when possible by creating a visible window.
+        // Important: only build ListItems for the visible window (avoid allocating the entire list).
+        let total = display.len();
+        let list_height = chunks[2].height as usize;
+        let sel_pos = display.iter().position(|&i| i == app.selected).unwrap_or(0);
+        let (start, end, selected_pos_in_visible) = if total <= list_height || list_height == 0 {
+            (0, total, sel_pos)
+        } else {
+            let half = list_height / 2;
+            let mut start = if sel_pos > half { sel_pos - half } else { 0 };
+            if start + list_height > total {
+                start = total - list_height;
             }
-        })
-        .collect();
+            (start, start + list_height, sel_pos - start)
+        };
 
-    let list = List::new(visible_items)
-        .block(Block::default().borders(Borders::ALL).title(" tracks "))
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-        .highlight_symbol("> ");
-    let mut state = ratatui::widgets::ListState::default();
-    if total > 0 {
-        state.select(Some(selected_pos_in_visible));
+        let visible_items: Vec<ListItem> = display[start..end]
+            .iter()
+            .map(|&i| {
+                let title = &app.tracks[i].display;
+                if q.is_empty() {
+                    ListItem::new(title.as_str())
+                } else {
+                    let positions = match query_lower.as_deref() {
+                        Some(ql) => app.fuzzy_match_positions_for_track_lower(i, ql),
+                        None => App::fuzzy_match_positions(title, q),
+                    };
+
+                    if let Some(positions) = positions {
+                        let mut rendered = String::new();
+                        let mut pos_iter = positions.into_iter();
+                        let mut next_pos = pos_iter.next();
+
+                        for (ci, ch) in title.chars().enumerate() {
+                            if next_pos == Some(ci) {
+                                for up in ch.to_uppercase() {
+                                    rendered.push(up);
+                                }
+                                next_pos = pos_iter.next();
+                            } else {
+                                rendered.push(ch);
+                            }
+                        }
+                        ListItem::new(rendered)
+                    } else {
+                        ListItem::new(title.as_str())
+                    }
+                }
+            })
+            .collect();
+
+        let list = List::new(visible_items)
+            .block(Block::default().borders(Borders::ALL).title(" tracks "))
+            .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+            .highlight_symbol("> ");
+        let mut state = ratatui::widgets::ListState::default();
+        if total > 0 {
+            state.select(Some(selected_pos_in_visible));
+        }
+        frame.render_stateful_widget(list, chunks[2], &mut state);
     }
-    frame.render_stateful_widget(list, chunks[2], &mut state);
+
+    // Overlay metadata popup (keeps list visible under it)
+    if app.metadata_window {
+        // Keep the popup inside the list area so it doesn't cover header/status/footer.
+        let list_area = chunks[2];
+        let popup_area = centered_rect_sized(72, 9, list_area);
+        frame.render_widget(Clear, popup_area);
+
+        let track = app.tracks.get(app.selected);
+        let meta = if let Some(track) = track {
+            let dur = format_duration_mmss_ceil(track.duration);
+            format!(
+                "Title: {}\nArtist: {}\nAlbum: {}\nDuration: {}\nPath: {}",
+                track.title,
+                track.artist.as_deref().unwrap_or("-"),
+                track.album.as_deref().unwrap_or("-"),
+                dur,
+                track.path.display()
+            )
+        } else {
+            "No track selected".to_string()
+        };
+        let meta_paragraph = Paragraph::new(meta)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" metadata (K closes) "),
+            )
+            .wrap(Wrap { trim: true });
+        frame.render_widget(meta_paragraph, popup_area);
+    }
 
     let footer = Paragraph::new(CONTROLS_TEXT.as_str())
         .block(Block::default().borders(Borders::ALL).title(" controls "))

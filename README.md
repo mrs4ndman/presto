@@ -11,7 +11,7 @@ A simple music player TUI written in Rust, with Vim-like controls.
 ## Getting started
 - Build: `cargo build`
 - Run: `cargo run -- [music_dir]`
-	- If `music_dir` is omitted, it defaults to `music`
+	- If `music_dir` is omitted, it defaults to the current directory
 
 ## Docs
 Start with [docs/README.md](docs/README.md).
@@ -28,16 +28,18 @@ Start with [docs/README.md](docs/README.md).
 - [x] Add `gg`/`G` to jump to top/bottom of track list
 - [x] Wrap status text in the UI
 - [x] Reorganize keybinds to be more vim-like
-- [ ] Song scrubbing (FF/FB)
-- [ ] Logo
-- [ ] Crossfade
-- [ ] TBD
+- [x] Song scrubbing (FF/FB) with `H` / `L`
+- [x] Fix: When hitting play-selected on currently playing song, do nothing
+- [x] Fix: When no arguments are given start up on current dir
+- [x] Metadata window (`K`)
+- [x] Fix: filter mode captures keypresses (you can type `j` / `k`)
 
 ### Long-term
 - [x] Full `playerctl` + MPRIS interface compliance
 - [x] Extract full metadata for songs that have it available
-- [ ] Config file -> Custom rebinding of controls, theming, etc.
 - [ ] Listening stats (amount, usage, recent songs, etc.)
+- [ ] Config file -> Custom rebinding of controls, theming, etc. (Mid-sized task)
+- [ ] Crossfade + exit delay (need to make it configurable)
 
 ## ↓ Current status ↓
 

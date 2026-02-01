@@ -159,9 +159,13 @@ pub struct App {
     pub filter_query: String,
     pub order_handle: Option<crate::audio::OrderHandle>,
     pub current_dir: Option<String>,
+    pub metadata_window: bool,
 }
 
 impl App {
+    pub fn toggle_metadata_window(&mut self) {
+        self.metadata_window = !self.metadata_window;
+    }
     pub fn new(tracks: Vec<Track>) -> Self {
         // Optimization: for larger libraries, precompute lowercase titles to speed up fuzzy
         // filtering (avoid per-char lowercase conversions on every redraw/keystroke).
@@ -194,6 +198,7 @@ impl App {
             filter_query: String::new(),
             order_handle: None,
             current_dir: None,
+            metadata_window: false,
         }
     }
 

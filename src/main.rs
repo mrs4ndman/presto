@@ -20,7 +20,12 @@ use mpris::{ControlCmd, MprisHandle};
 use std::{sync::mpsc, time::Duration};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let dir = env::args().nth(1).unwrap_or("Music".to_string());
+    let dir = env::args().nth(1).unwrap_or_else(|| {
+        std::env::current_dir()
+            .ok()
+            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "Music".to_string())
+    });
 
     let tracks = scan(Path::new(&dir));
     let audio_player = AudioPlayer::new(tracks.clone());
@@ -116,7 +121,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Ok(cmd) = control_rx.try_recv() {
                 match cmd {
                     ControlCmd::Quit => {
-                        let _ = audio_player.send(AudioCmd::Quit);
+                        // Soft quit: fade out audio and then exit.
+                        audio_player.quit_softly(Duration::from_millis(700));
                         return Ok(());
                     }
                     ControlCmd::Play => match app.playback {
@@ -204,6 +210,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
+                    // Only handle actual key presses (ignore repeats/releases).
+                    if key.kind != crossterm::event::KeyEventKind::Press {
+                        continue;
+                    }
+
                     if app.filter_mode {
                         pending_gg = false;
                         match key.code {
@@ -215,12 +226,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 app.pop_filter_char();
                                 update_mpris(&mpris, &app);
                             }
-                            KeyCode::Char('j') | KeyCode::Down => {
+                            KeyCode::Char('j')
+                                if key
+                                    .modifiers
+                                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                            {
                                 app.follow_playback_off();
                                 app.next();
                                 update_mpris(&mpris, &app);
                             }
-                            KeyCode::Char('k') | KeyCode::Up => {
+                            KeyCode::Char('k')
+                                if key
+                                    .modifiers
+                                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                            {
+                                app.follow_playback_off();
+                                app.prev();
+                                update_mpris(&mpris, &app);
+                            }
+                            KeyCode::Char('n')
+                                if key
+                                    .modifiers
+                                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                            {
+                                app.follow_playback_off();
+                                app.next();
+                                update_mpris(&mpris, &app);
+                            }
+                            KeyCode::Char('p')
+                                if key
+                                    .modifiers
+                                    .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                            {
                                 app.follow_playback_off();
                                 app.prev();
                                 update_mpris(&mpris, &app);
@@ -251,7 +288,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match key.code {
                             KeyCode::Char('q') => {
                                 pending_gg = false;
-                                let _ = audio_player.send(AudioCmd::Quit);
+                                // Soft quit: fade out audio and then exit.
+                                audio_player.quit_softly(Duration::from_millis(700));
                                 break;
                             }
                             KeyCode::Char('/') => {
@@ -292,13 +330,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     update_mpris(&mpris, &app);
                                 }
                             }
-                            KeyCode::Char('j') | KeyCode::Down => {
+                            KeyCode::Char('j') => {
                                 pending_gg = false;
                                 app.follow_playback_off();
                                 app.next();
                                 update_mpris(&mpris, &app);
                             }
-                            KeyCode::Char('k') | KeyCode::Up => {
+                            KeyCode::Char('k') => {
                                 pending_gg = false;
                                 app.follow_playback_off();
                                 app.prev();
@@ -307,11 +345,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Enter => {
                                 pending_gg = false;
                                 if app.has_tracks() {
-                                    app.follow_playback_on();
-                                    app.set_pending_follow_index(app.selected);
-                                    let _ = audio_player.send(AudioCmd::Play(app.selected));
-                                    app.playback = PlaybackState::Playing;
-                                    update_mpris(&mpris, &app);
+                                    // If already playing this song, do nothing
+                                    let is_playing_selected = app.playback
+                                        == PlaybackState::Playing
+                                        && app
+                                            .playback_handle
+                                            .as_ref()
+                                            .and_then(|h| h.lock().ok().and_then(|info| info.index))
+                                            .map(|idx| idx == app.selected)
+                                            .unwrap_or(false);
+                                    if !is_playing_selected {
+                                        app.follow_playback_on();
+                                        app.set_pending_follow_index(app.selected);
+                                        let _ = audio_player.send(AudioCmd::Play(app.selected));
+                                        app.playback = PlaybackState::Playing;
+                                        update_mpris(&mpris, &app);
+                                    }
                                 }
                             }
                             KeyCode::Char('p') => {
@@ -331,6 +380,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Char('h') => {
                                 pending_gg = false;
                                 let _ = control_tx.send(ControlCmd::Prev);
+                            }
+                            KeyCode::Char('L') => {
+                                pending_gg = false;
+                                let _ = audio_player.send(AudioCmd::SeekBy(5));
+                            }
+                            KeyCode::Char('H') => {
+                                pending_gg = false;
+                                let _ = audio_player.send(AudioCmd::SeekBy(-5));
+                            }
+                            KeyCode::Char('K') => {
+                                pending_gg = false;
+                                app.toggle_metadata_window();
+                                update_mpris(&mpris, &app);
                             }
                             _ => {}
                         }
