@@ -7,6 +7,7 @@ use ratatui::{
 use std::{collections::BTreeMap, sync::LazyLock, time::Duration};
 
 use crate::app::App;
+use crate::config::{ControlsSettings, TimeField, TrackDisplayField, UiSettings};
 
 static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     let mut map: BTreeMap<String, String> = BTreeMap::new();
@@ -15,7 +16,7 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map.insert("enter".to_string(), "play selected song".to_string());
     map.insert("space/p".to_string(), "play/pause".to_string());
     map.insert("h/l".to_string(), "prev/next song".to_string());
-    map.insert("H/L".to_string(), "scrub -/+5s".to_string());
+    // H/L is filled dynamically from config.
     map.insert("/".to_string(), "filter".to_string());
     map.insert("s".to_string(), "shuffle".to_string());
     map.insert("r".to_string(), "loop mode".to_string());
@@ -24,17 +25,118 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map
 });
 
-static CONTROLS_TEXT: LazyLock<String> = LazyLock::new(|| {
+fn controls_text(scrub_seconds: u64) -> String {
     // Keep the rendered order stable and human-friendly.
     let order = [
         "j/k", "h/l", "H/L", "enter", "space/p", "gg/G", "K", "/", "s", "r", "q",
     ];
     order
         .iter()
-        .filter_map(|k| CONTROLS_MAP.get(*k).map(|v| format!("[{}] {}", k, v)))
+        .filter_map(|k| {
+            if *k == "H/L" {
+                Some(format!("[H/L] scrub -/+{}s", scrub_seconds))
+            } else {
+                CONTROLS_MAP.get(*k).map(|v| format!("[{}] {}", k, v))
+            }
+        })
         .collect::<Vec<String>>()
         .join(" | ")
-});
+}
+
+fn format_mmss(d: Duration) -> String {
+    let secs = d.as_secs();
+    format!("{:02}:{:02}", secs / 60, secs % 60)
+}
+
+fn now_playing_track_text(app: &App, track_index: usize, ui: &UiSettings) -> String {
+    let track = &app.tracks[track_index];
+    let mut parts: Vec<String> = Vec::new();
+
+    for f in &ui.now_playing_track_fields {
+        match f {
+            TrackDisplayField::Display => {
+                if !track.display.trim().is_empty() {
+                    parts.push(track.display.clone());
+                }
+            }
+            TrackDisplayField::Title => {
+                if !track.title.trim().is_empty() {
+                    parts.push(track.title.clone());
+                }
+            }
+            TrackDisplayField::Artist => {
+                if let Some(a) = track
+                    .artist
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
+                    parts.push(a.to_string());
+                }
+            }
+            TrackDisplayField::Album => {
+                if let Some(a) = track
+                    .album
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
+                    parts.push(a.to_string());
+                }
+            }
+            TrackDisplayField::Filename => {
+                if let Some(stem) = track.path.file_stem().and_then(|s| s.to_str()) {
+                    if !stem.trim().is_empty() {
+                        parts.push(stem.to_string());
+                    }
+                }
+            }
+            TrackDisplayField::Path => {
+                parts.push(track.path.display().to_string());
+            }
+        }
+    }
+
+    if parts.is_empty() {
+        track.display.clone()
+    } else {
+        parts.join(&ui.now_playing_track_separator)
+    }
+}
+
+fn now_playing_time_text(
+    elapsed: Duration,
+    total: Option<Duration>,
+    ui: &UiSettings,
+) -> Option<String> {
+    if ui.now_playing_time_fields.is_empty() {
+        return None;
+    }
+
+    let mut parts: Vec<String> = Vec::new();
+    for f in &ui.now_playing_time_fields {
+        match f {
+            TimeField::Elapsed => parts.push(format_mmss(elapsed)),
+            TimeField::Total => {
+                if let Some(t) = total {
+                    parts.push(format_mmss(t));
+                }
+            }
+            TimeField::Remaining => {
+                if let Some(t) = total {
+                    let rem = t.saturating_sub(elapsed);
+                    parts.push(format!("-{}", format_mmss(rem)));
+                }
+            }
+        }
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(&ui.now_playing_time_separator))
+    }
+}
 
 fn centered_rect_sized(mut width: u16, mut height: u16, r: Rect) -> Rect {
     // Keep the popup smaller and avoid covering the entire UI.
@@ -66,7 +168,13 @@ fn format_duration_mmss_ceil(d: Option<Duration>) -> String {
     format!("{}:{:02} ({}s)", minutes, seconds, total_secs)
 }
 
-pub fn draw(frame: &mut Frame, app: &App, display: &[usize]) {
+pub fn draw(
+    frame: &mut Frame,
+    app: &App,
+    display: &[usize],
+    ui_settings: &UiSettings,
+    controls_settings: &ControlsSettings,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -77,7 +185,7 @@ pub fn draw(frame: &mut Frame, app: &App, display: &[usize]) {
         ])
         .split(frame.area());
     // Header
-    let header = Paragraph::new(" ~ And presto! It's music ~ ")
+    let header = Paragraph::new(ui_settings.header_text.as_str())
         .block(Block::default().borders(Borders::ALL).title(" presto "));
     frame.render_widget(header, chunks[0]);
 
@@ -117,30 +225,12 @@ pub fn draw(frame: &mut Frame, app: &App, display: &[usize]) {
                 let state = if info.playing { "Playing" } else { "Paused" };
                 if let Some(idx) = info.index {
                     let track = &app.tracks[idx];
-                    let duration = track.duration;
-
-                    let elapsed_secs = info.elapsed.as_secs();
-                    let elapsed_m = elapsed_secs / 60;
-                    let elapsed_s = elapsed_secs % 60;
-
-                    if let Some(dur) = duration {
-                        let total_secs = dur.as_secs();
-                        let rem_secs = total_secs.saturating_sub(elapsed_secs);
-                        parts.push(format!(
-                            "Song: {} [{:02}:{:02} / {:02}:{:02} | -{:02}:{:02}]",
-                            track.display,
-                            elapsed_m,
-                            elapsed_s,
-                            total_secs / 60,
-                            total_secs % 60,
-                            rem_secs / 60,
-                            rem_secs % 60,
-                        ));
+                    let song = now_playing_track_text(app, idx, ui_settings);
+                    let time = now_playing_time_text(info.elapsed, track.duration, ui_settings);
+                    if let Some(time) = time {
+                        parts.push(format!("Song: {} [{}]", song, time));
                     } else {
-                        parts.push(format!(
-                            "Song: {} [{:02}:{:02}]",
-                            track.display, elapsed_m, elapsed_s,
-                        ));
+                        parts.push(format!("Song: {}", song));
                     }
                     parts.push(state.to_string());
                 } else {
@@ -274,7 +364,8 @@ pub fn draw(frame: &mut Frame, app: &App, display: &[usize]) {
         frame.render_widget(meta_paragraph, popup_area);
     }
 
-    let footer = Paragraph::new(CONTROLS_TEXT.as_str())
+    let footer_text = controls_text(controls_settings.scrub_seconds);
+    let footer = Paragraph::new(footer_text)
         .block(Block::default().borders(Borders::ALL).title(" controls "))
         .wrap(Wrap { trim: true });
 

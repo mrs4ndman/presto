@@ -33,13 +33,14 @@ Start with [docs/README.md](docs/README.md).
 - [x] Fix: When no arguments are given start up on current dir
 - [x] Metadata window (`K`)
 - [x] Fix: filter mode captures keypresses (you can type `j` / `k`)
+- [ ] Pad shown data in the UI on the sides with 1 space
 
 ### Long-term
 - [x] Full `playerctl` + MPRIS interface compliance
 - [x] Extract full metadata for songs that have it available
+- [x] Config file -> Custom rebinding of controls, theming, etc. (Mid-sized task)
+- [x] Crossfade + exit delay (need to make it configurable)
 - [ ] Listening stats (amount, usage, recent songs, etc.)
-- [ ] Config file -> Custom rebinding of controls, theming, etc. (Mid-sized task)
-- [ ] Crossfade + exit delay (need to make it configurable)
 
 ## ↓ Current status ↓
 

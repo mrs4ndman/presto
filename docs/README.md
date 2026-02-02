@@ -30,6 +30,7 @@ cargo run -- /path/to/music
 Start here:
 
 - Controls and keys: [CONTROLS.md](CONTROLS.md)
+- Configuration: [CONFIG.md](CONFIG.md)
 - Troubleshooting common issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 Implementation and contributor notes:

@@ -16,11 +16,16 @@ This is the complete keyboard reference for Presto.
 - `Space` / `p`: play/pause (maps to MPRIS PlayPause)
 - `h`: previous track
 - `l`: next track
-- `H`: scrub backward 5 seconds
-- `L`: scrub forward 5 seconds
-- `r`: cycle loop mode (NoLoop → LoopAll → LoopOne)
+- `H`: scrub backward (default 5s; configurable)
+- `L`: scrub forward (default 5s; configurable)
+- `r`: cycle loop mode (LoopAll → LoopOne → NoLoop)
 - `s`: toggle shuffle
 - `q`: quit (soft fade-out)
+
+Notes:
+
+- Scrub amount is controlled by `controls.scrub_seconds` in the config file.
+- Default loop mode is LoopAll (loop-around) unless overridden in config.
 
 ## Metadata
 
