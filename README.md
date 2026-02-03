@@ -18,7 +18,10 @@ Start with [docs/README.md](docs/README.md).
 
 ## TODO:
 
-### Short-term
+### Short-term 
+<details>
+<summary>List of covered items</summary>
+
 - [x] Add a proper “Now Playing” line + elapsed time (requires tracking start time / sink position)
 - [x] Emit MPRIS PropertiesChanged so status/metadata updates push instantly
 - [x] Improve filtering to fuzzy-match + highlight matches in the list
@@ -35,12 +38,17 @@ Start with [docs/README.md](docs/README.md).
 - [x] Fix: filter mode captures keypresses (you can type `j` / `k`)
 - [ ] Pad shown data in the UI on the sides with 1 space
 
+</details>
+
 ### Long-term
+<details>
+<summary>List of covered items</summary>
 - [x] Full `playerctl` + MPRIS interface compliance
 - [x] Extract full metadata for songs that have it available
 - [x] Config file -> Custom rebinding of controls, theming, etc. (Mid-sized task)
 - [x] Crossfade + exit delay (need to make it configurable)
 - [ ] Listening stats (amount, usage, recent songs, etc.)
+</details>
 
 ## ↓ Current status ↓
 
