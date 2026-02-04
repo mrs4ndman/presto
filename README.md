@@ -37,6 +37,7 @@ Start with [docs/README.md](docs/README.md).
 - [x] Metadata window (`K`)
 - [x] Fix: filter mode captures keypresses (you can type `j` / `k`)
 - [ ] Pad shown data in the UI on the sides with 1 space
+- [ ] Bug: `gg` / `G` only works after moving around with cursor
 
 </details>
 
@@ -48,8 +49,10 @@ Start with [docs/README.md](docs/README.md).
 - [x] Config file -> Custom rebinding of controls, theming, etc. (Mid-sized task)
 - [x] Crossfade + exit delay (need to make it configurable)
 - [ ] Listening stats (amount, usage, recent songs, etc.)
+- [ ] Restoring previous state after exiting (per-directory)
+
 </details>
 
-## ↓ Current status ↓
+## ↓ Current status (!!WARNING!!: VERY LOUD, I'm sorry :/) ↓
 
-https://github.com/user-attachments/assets/64471b41-b747-4d18-b7c4-b17f0e670bba
+https://github.com/user-attachments/assets/34407dda-7599-4ec2-a0af-66889ef6251a
