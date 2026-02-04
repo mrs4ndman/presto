@@ -14,6 +14,10 @@ use super::queue::reorder_queue_in_place;
 use super::sink::create_sink_at;
 use super::types::{AudioCmd, LoopMode, OrderHandle, PlaybackHandle};
 
+/// Spawn the audio thread which processes `AudioCmd` messages and drives playback.
+///
+/// This runs a dedicated thread handling decoding, sinks, shuffle, queueing and
+/// crossfade logic. It returns a `JoinHandle` for the spawned thread.
 pub(super) fn spawn_audio_thread(
     tracks: Vec<Track>,
     rx: Receiver<AudioCmd>,

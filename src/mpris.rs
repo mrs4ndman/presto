@@ -1,3 +1,8 @@
+//! MPRIS integration: expose a DBus MPRIS interface for external control.
+//!
+//! This module implements a minimal MPRIS interface so external tools
+//! (e.g., `playerctl`) can control playback and read metadata.
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, mpsc::Sender};
 
@@ -7,7 +12,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::app::PlaybackState;
 use crate::library::Track;
-
+/// Commands sent from the MPRIS interface into the main control loop.
 #[derive(Clone, Debug)]
 pub enum ControlCmd {
     Quit,
@@ -30,6 +35,7 @@ struct SharedState {
     track_id: Option<ObjectPath<'static>>,
 }
 
+/// Handle to update MPRIS state from other threads.
 pub struct MprisHandle {
     state: Arc<Mutex<SharedState>>,
     notify: std::sync::mpsc::Sender<()>,
@@ -43,6 +49,8 @@ impl MprisHandle {
         }
     }
 
+    /// Update the metadata for the currently loaded track (index optional).
+    /// Passing `None` for `track` clears metadata fields.
     pub fn set_track_metadata(&self, idx: Option<usize>, track: Option<&Track>) {
         if let Ok(mut s) = self.state.lock() {
             if let Some(t) = track {

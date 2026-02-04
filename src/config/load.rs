@@ -2,7 +2,12 @@ use std::{env, path::PathBuf};
 
 use super::schema::Settings;
 
+/// Configuration loading helpers.
+///
+/// `Settings::load` tries environment variables first (prefix `PRESTO__`), then an
+/// optional config file and falls back to struct defaults.
 impl Settings {
+    /// Load settings from environment and optional config file.
     pub fn load() -> Result<Self, ::config::ConfigError> {
         let config_path = resolve_config_path();
 
@@ -23,6 +28,7 @@ impl Settings {
         Ok(settings)
     }
 
+    /// Perform basic validation checks on loaded settings.
     pub fn validate(&self) -> Result<(), String> {
         if self.audio.crossfade_steps == 0 {
             return Err("audio.crossfade_steps must be >= 1".to_string());
@@ -31,6 +37,7 @@ impl Settings {
     }
 }
 
+/// Resolve the config path from `PRESTO_CONFIG_PATH` or XDG defaults.
 pub fn resolve_config_path() -> Option<PathBuf> {
     if let Some(p) = env::var_os("PRESTO_CONFIG_PATH") {
         let p = PathBuf::from(p);
@@ -39,6 +46,8 @@ pub fn resolve_config_path() -> Option<PathBuf> {
     default_config_path()
 }
 
+/// Compute the default config path under `$XDG_CONFIG_HOME/presto/config.toml`
+/// or `~/.config/presto/config.toml` when `XDG_CONFIG_HOME` is not set.
 pub fn default_config_path() -> Option<PathBuf> {
     let config_home = if let Some(xdg) = env::var_os("XDG_CONFIG_HOME") {
         Some(PathBuf::from(xdg))

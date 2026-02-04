@@ -1,3 +1,7 @@
+//! UI rendering helpers for the terminal user interface.
+//!
+//! This module contains functions to render the TUI using `ratatui`.
+
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -25,6 +29,9 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map
 });
 
+
+
+/// Render the controls help text, incorporating scrub seconds.
 fn controls_text(scrub_seconds: u64) -> String {
     // Keep the rendered order stable and human-friendly.
     let order = [
@@ -43,11 +50,13 @@ fn controls_text(scrub_seconds: u64) -> String {
         .join(" | ")
 }
 
+/// Format a `Duration` as `MM:SS`.
 fn format_mmss(d: Duration) -> String {
     let secs = d.as_secs();
     format!("{:02}:{:02}", secs / 60, secs % 60)
 }
 
+/// Build the "now playing" track text according to `ui` settings.
 fn now_playing_track_text(app: &App, track_index: usize, ui: &UiSettings) -> String {
     let track = &app.tracks[track_index];
     let mut parts: Vec<String> = Vec::new();
@@ -104,6 +113,7 @@ fn now_playing_track_text(app: &App, track_index: usize, ui: &UiSettings) -> Str
     }
 }
 
+/// Build the now-playing time text (elapsed/total/remaining) per `UiSettings`.
 fn now_playing_time_text(
     elapsed: Duration,
     total: Option<Duration>,
@@ -138,6 +148,7 @@ fn now_playing_time_text(
     }
 }
 
+/// Compute a centered rectangle with given size constrained to `r`.
 fn centered_rect_sized(mut width: u16, mut height: u16, r: Rect) -> Rect {
     // Keep the popup smaller and avoid covering the entire UI.
     width = width.min(r.width.saturating_sub(2)).max(10);
@@ -153,6 +164,7 @@ fn centered_rect_sized(mut width: u16, mut height: u16, r: Rect) -> Rect {
     }
 }
 
+/// Format an optional duration, rounding up partial seconds, showing total seconds.
 fn format_duration_mmss_ceil(d: Option<Duration>) -> String {
     let Some(d) = d else {
         return "-".to_string();
@@ -168,6 +180,7 @@ fn format_duration_mmss_ceil(d: Option<Duration>) -> String {
     format!("{}:{:02} ({}s)", minutes, seconds, total_secs)
 }
 
+/// Render the entire UI into the provided `frame` using `app` state and settings.
 pub fn draw(
     frame: &mut Frame,
     app: &App,

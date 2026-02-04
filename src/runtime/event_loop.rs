@@ -12,14 +12,21 @@ use crate::mpris::MprisHandle;
 use crate::runtime::mpris_sync::update_mpris;
 use crate::ui;
 
+/// State tracked by the runtime event loop across iterations.
 pub struct EventLoopState {
+    /// Optional snapshot of prior order when shuffle was toggled; used to
+    /// detect a changed randomized order and reselect the top item.
     pub pending_shuffle_reselect_from: Option<Vec<usize>>,
+    /// Internal two-key prefix state used for `gg` handling.
     pub pending_gg: bool,
+    /// Last-known playing index as emitted to MPRIS.
     pub last_mpris_index: Option<usize>,
+    /// Last-known playback state as emitted to MPRIS.
     pub last_mpris_playback: PlaybackState,
 }
 
 impl EventLoopState {
+    /// Construct a new `EventLoopState` seeded from `app`.
     pub fn new(app: &App) -> Self {
         Self {
             pending_shuffle_reselect_from: None,
@@ -30,6 +37,8 @@ impl EventLoopState {
     }
 }
 
+/// Main terminal event loop: handles input, UI drawing, sync with the audio
+/// thread and MPRIS. Returns `Ok(())` when shutdown is requested.
 pub fn run(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     settings: &config::Settings,

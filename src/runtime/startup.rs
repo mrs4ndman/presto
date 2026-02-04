@@ -1,7 +1,14 @@
+//! Startup helpers to apply configuration defaults to the running app.
+//!
+//! Functions here translate `config` values into runtime settings and
+//! initialize audio thread state accordingly.
+
 use crate::app::App;
 use crate::audio::{AudioCmd, AudioPlayer, LoopMode};
 use crate::config;
 
+/// Apply playback-related defaults from `settings` to the `app` and
+/// initialize the `audio_player` accordingly.
 pub fn apply_playback_defaults(
     app: &mut App,
     audio_player: &AudioPlayer,

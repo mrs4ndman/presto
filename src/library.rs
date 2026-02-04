@@ -1,3 +1,8 @@
+//! Library crate: scanning and track model for the music library.
+//!
+//! This module provides the `Track` model and a `scan` helper used to
+//! discover audio files on disk.
+
 mod display;
 mod model;
 mod scan;

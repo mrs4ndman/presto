@@ -9,6 +9,7 @@ use crate::config::LibrarySettings;
 use super::display::display_from_fields;
 use super::model::Track;
 
+// Returns true when `path`'s extension matches configured audio extensions.
 fn is_audio_file(path: &Path, settings: &LibrarySettings) -> bool {
     let exts: Vec<String> = settings
         .extensions
@@ -26,6 +27,7 @@ fn is_audio_file(path: &Path, settings: &LibrarySettings) -> bool {
         .unwrap_or(false)
 }
 
+// Return true if the path's final component is a hidden (dot) file.
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .and_then(|s| s.to_str())
@@ -33,6 +35,8 @@ fn is_hidden(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Scan `dir` for audio files according to `settings` and return a sorted list
+/// of `Track` entries with metadata extracted when available.
 pub fn scan(dir: &Path, settings: &LibrarySettings) -> Vec<Track> {
     let mut tracks: Vec<Track> = Vec::new();
 

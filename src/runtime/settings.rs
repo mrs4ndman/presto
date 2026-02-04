@@ -1,5 +1,8 @@
 use crate::config;
 
+/// Load configuration, validate it, and fall back to defaults on error.
+///
+/// Non-fatal failures are logged to stderr but do not prevent startup.
 pub fn load_settings() -> config::Settings {
     match config::Settings::load() {
         Ok(s) => {
