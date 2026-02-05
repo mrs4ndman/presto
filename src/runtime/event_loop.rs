@@ -23,6 +23,7 @@ pub struct EventLoopState {
     pub last_mpris_index: Option<usize>,
     /// Last-known playback state as emitted to MPRIS.
     pub last_mpris_playback: PlaybackState,
+    pending_zz: bool,
 }
 
 impl EventLoopState {
@@ -31,6 +32,7 @@ impl EventLoopState {
         Self {
             pending_shuffle_reselect_from: None,
             pending_gg: false,
+            pending_zz: false,
             last_mpris_index: None,
             last_mpris_playback: app.playback,
         }
@@ -338,9 +340,28 @@ fn handle_key_event(
             let _ = audio_player.send(AudioCmd::SetLoopMode(app.loop_mode));
             update_mpris(mpris, app);
         }
+        KeyCode::Char('z') => {
+            if state.pending_zz {
+                state.pending_zz = false;
+                let handle = &app.playback_handle;
+                let mut track_id = 0;
+                if let Some(handle_val) = handle {
+                    if let Ok(info) = handle_val.lock() {
+                        if let Some(id) = info.index {
+                            track_id = id;
+                        }
+                    }
+                 app.set_selected(track_id);
+                    update_mpris(mpris, app);
+                }
+            } else {
+                state.pending_zz = true;
+            }
+        }
         KeyCode::Char('g') => {
             if state.pending_gg {
                 state.pending_gg = false;
+                app.follow_playback_off();
                 let display = app.display_indices();
                 if let Some(&first) = display.first() {
                     app.set_selected(first);

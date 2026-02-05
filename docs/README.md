@@ -38,7 +38,7 @@ Implementation and contributor notes:
 - Architecture and code map: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Development workflow: [DEVELOPMENT.md](DEVELOPMENT.md)
 - MPRIS / `playerctl` integration: [MPRIS.md](MPRIS.md)
-- Design notes (assumptions, pitfalls, tradeoffs): [LEARNING.md](LEARNING.md)
+- Design notes (assumptions, pitfalls, tradeoffs): [ORGANIZATION.md](ORGANIZATION.md)
 
 ## Behavior notes (high signal)
 

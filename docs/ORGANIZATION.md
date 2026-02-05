@@ -1,4 +1,4 @@
-# Organization + Future plans
+# Organization + Future plans / Ideas (OLD)
 
 ## 1. ***PURPOSE***
 - Lightweight TUI music player + library manager (playlists and such)
