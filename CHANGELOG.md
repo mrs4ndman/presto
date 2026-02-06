@@ -21,3 +21,4 @@
 | 04-02-2026        | Bug: `gg` / `G` worked only after moving around the cursor with `j/k`                  |                                                           |
 | 04-02-2026        | Bug: Auto-locating to the top after shuffle only worked after moving around the cursor |                                                           |
 | 05-02-2026        | Feature: `zz` functionality to reselect & center currently playing song                |                                                           |
+| 06-02-2026        | Tweak: Pad shown data in the UI on the sides with 1 space on the left                  |                                                           |

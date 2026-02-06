@@ -4,9 +4,9 @@
 
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style, Stylize},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap},
 };
 use std::{collections::BTreeMap, sync::LazyLock, time::Duration};
 
@@ -28,8 +28,6 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map.insert("q".to_string(), "quit".to_string());
     map
 });
-
-
 
 /// Render the controls help text, incorporating scrub seconds.
 fn controls_text(scrub_seconds: u64) -> String {
@@ -199,7 +197,13 @@ pub fn draw(
         .split(frame.area());
     // Header
     let header = Paragraph::new(ui_settings.header_text.as_str())
-        .block(Block::default().borders(Borders::ALL).title(" presto "));
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" presto ")
+                .title_alignment(Alignment::Center),
+        );
     frame.render_widget(header, chunks[0]);
 
     // Status box
@@ -269,7 +273,16 @@ pub fn draw(
 
     let status_par = Paragraph::new(status)
         .slow_blink()
-        .block(Block::default().borders(Borders::ALL).title(" status "))
+        .block(
+            Block::bordered()
+                .padding(Padding {
+                    left: 1,
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                })
+                .title(" status "),
+        )
         .wrap(Wrap { trim: true });
     frame.render_widget(status_par, chunks[1]);
 
@@ -370,6 +383,12 @@ pub fn draw(
         let meta_paragraph = Paragraph::new(meta)
             .block(
                 Block::default()
+                    .padding(Padding {
+                        left: 1,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                    })
                     .borders(Borders::ALL)
                     .title(" metadata (K closes) "),
             )
@@ -379,7 +398,17 @@ pub fn draw(
 
     let footer_text = controls_text(controls_settings.scrub_seconds);
     let footer = Paragraph::new(footer_text)
-        .block(Block::default().borders(Borders::ALL).title(" controls "))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" controls ")
+                .padding(Padding {
+                    left: 1,
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                }),
+        )
         .wrap(Wrap { trim: true });
 
     frame.render_widget(footer, chunks[3]);

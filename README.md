@@ -24,7 +24,7 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- [ ] Pad shown data in the UI on the sides with 1 space
+- [ ] Make controls content expand its section when wrapping
 - [ ] Rethink metadata format + appearence
 
 </details>
@@ -36,6 +36,7 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 - [ ] Restoring previous state after exiting (per-directory)
 - [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Theming
+- [ ] Make `presto` have its own volume controls
 
 </details>
 
