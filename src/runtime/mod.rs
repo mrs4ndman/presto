@@ -1,5 +1,6 @@
 use std::env;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::mpsc;
 
 use crossterm::execute;
@@ -19,6 +20,26 @@ mod settings;
 mod startup;
 mod state;
 
+/// Expand a directory to an absolute path for UI display.
+fn absolutize_dir_for_display(dir: &str) -> String {
+    let p = PathBuf::from(dir);
+    if p.is_absolute() {
+        return dir.to_string();
+    }
+
+    let Ok(cwd) = std::env::current_dir() else {
+        return dir.to_string();
+    };
+
+    let joined = cwd.join(p);
+    joined
+        .canonicalize()
+        .unwrap_or(joined)
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Initialize settings, library, audio thread, and enter the main event loop.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let settings = settings::load_settings();
 
@@ -34,26 +55,29 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new(tracks);
 
     app.follow_playback = settings.ui.follow_playback;
-    app.set_current_dir(dir.clone());
+    app.set_current_dir(absolutize_dir_for_display(&dir));
     app.set_playback_handle(audio_player.playback_handle());
     app.set_order_handle(audio_player.order_handle());
     app.set_initial_volume_percent(settings.audio.initial_volume_percent);
 
     let store = state::StateStore::new_default();
-    let persisted_state = match store.load_directory_state(&dir) {
-        Ok(state) => state,
-        Err(err) => {
-            app.set_notice(format!("State load failed: {}", err));
-            eprintln!(
-                "presto: state_load_failed path=\"{}\" error=\"{}\"",
-                err.path().display(),
-                err
-            );
-            None
+    let persisted_state = if settings.state.enabled {
+        match store.load_directory_state(&dir) {
+            Ok(state) => state,
+            Err(err) => {
+                app.set_notice(format!("State load failed: {}", err));
+                eprintln!(
+                    "presto: state_load_failed path=\"{}\" error=\"{}\"",
+                    err.path().display(),
+                    err
+                );
+                None
+            }
         }
+    } else {
+        None
     };
-    state::apply_filter_and_selection(&mut app, persisted_state.as_ref());
-
+    // Apply persisted playback defaults before applying selection fallbacks.
     app.shuffle = persisted_state
         .as_ref()
         .and_then(|s| s.shuffle)
@@ -67,6 +91,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             crate::config::LoopModeSetting::LoopAll => crate::audio::LoopMode::LoopAll,
             crate::config::LoopModeSetting::LoopOne => crate::audio::LoopMode::LoopOne,
         });
+
+    state::apply_filter_and_selection(&mut app, persisted_state.as_ref());
 
     if let Some(fp) = persisted_state.as_ref().and_then(|s| s.follow_playback) {
         if fp {
@@ -111,12 +137,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
-    if let Err(e) = store.persist_directory_state(&dir, &app) {
-        eprintln!(
-            "presto: state_persist_failed path=\"{}\" error=\"{}\"",
-            e.path().display(),
-            e
-        );
+    if settings.state.enabled {
+        if let Err(e) = store.persist_directory_state(&dir, &app) {
+            eprintln!(
+                "presto: state_persist_failed path=\"{}\" error=\"{}\"",
+                e.path().display(),
+                e
+            );
+        }
     }
 
     run_result

@@ -70,6 +70,7 @@ pub(super) fn spawn_audio_thread(
             }
         });
 
+        /// Start playback of a specific index and update queue/order tracking.
         fn do_play(
             i: usize,
             stream: &rodio::OutputStream,
@@ -148,6 +149,7 @@ pub(super) fn spawn_audio_thread(
             }
         }
 
+        /// Stop playback and reset shared playback state.
         fn do_stop(
             sink: &mut Option<Sink>,
             index: &mut Option<usize>,
@@ -171,6 +173,7 @@ pub(super) fn spawn_audio_thread(
             }
         }
 
+        /// Fade the sink to silence over `fade_out_ms` in fixed steps.
         fn fade_out_sink(sink: &Sink, fade_out_ms: u64, current_volume: f32) {
             let start_volume = clamp_volume(current_volume);
             if fade_out_ms == 0 {

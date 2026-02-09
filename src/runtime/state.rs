@@ -12,6 +12,8 @@ use crate::config::load::default_config_path;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DirectoryState {
     pub selected_path: Option<String>,
+    pub last_played_path: Option<String>,
+    pub volume_percent: Option<u8>,
     pub filter_query: Option<String>,
     pub shuffle: Option<bool>,
     pub loop_mode: Option<LoopMode>,
@@ -91,10 +93,20 @@ impl StateStore {
             .get(app.selected)
             .map(|t| t.path.to_string_lossy().to_string());
 
+        let last_played_path = app
+            .playback_handle
+            .as_ref()
+            .and_then(|h| h.lock().ok().and_then(|info| info.index))
+            .and_then(|idx| app.tracks.get(idx))
+            .map(|t| t.path.to_string_lossy().to_string())
+            .or_else(|| selected_path.clone());
+
         all.dirs.insert(
             dir.to_string(),
             DirectoryState {
                 selected_path,
+                last_played_path,
+                volume_percent: Some(app.volume_percent()),
                 filter_query: if app.filter_query.trim().is_empty() {
                     None
                 } else {
@@ -115,6 +127,7 @@ impl StateStore {
         fs::write(path, data).map_err(|e| StateStoreError::new(path, e))
     }
 
+    /// Load the full persisted state file (or an empty default if missing).
     fn load_all_state(&self) -> Result<PersistedState, StateStoreError> {
         let path = match &self.path {
             Some(p) => p,
@@ -134,10 +147,12 @@ impl StateStore {
     }
 }
 
+/// Compute the state file path alongside the config directory.
 fn state_file_path() -> Option<PathBuf> {
     default_config_path().and_then(|p| p.parent().map(|d| d.join("state.toml")))
 }
 
+/// Apply persisted filter and selection to the app, if present.
 pub fn apply_filter_and_selection(app: &mut App, state: Option<&DirectoryState>) {
     if let Some(st) = state {
         if let Some(filter) = st.filter_query.as_ref() {
@@ -145,7 +160,17 @@ pub fn apply_filter_and_selection(app: &mut App, state: Option<&DirectoryState>)
             app.mark_queue_dirty();
         }
 
-        if let Some(path) = st.selected_path.as_ref() {
+        if let Some(pct) = st.volume_percent {
+            app.set_initial_volume_percent(pct);
+        }
+
+        let candidate_path = st
+            .last_played_path
+            .as_ref()
+            .or(st.selected_path.as_ref());
+
+        let mut selected_set = false;
+        if let Some(path) = candidate_path {
             if let Some((idx, _)) = app
                 .tracks
                 .iter()
@@ -153,7 +178,20 @@ pub fn apply_filter_and_selection(app: &mut App, state: Option<&DirectoryState>)
                 .find(|(_, t)| t.path.to_string_lossy() == path.as_str())
             {
                 app.set_selected(idx);
+                selected_set = true;
             }
+        }
+
+        if !selected_set {
+            let display = app.display_indices();
+            if let Some(&first) = display.first() {
+                app.set_selected(first);
+            }
+        }
+    } else {
+        let display = app.display_indices();
+        if let Some(&first) = display.first() {
+            app.set_selected(first);
         }
     }
 }
@@ -193,6 +231,8 @@ mod tests {
 
         let loaded = store.load_directory_state("/music").unwrap().unwrap();
         assert_eq!(loaded.selected_path, Some("/music/b.mp3".to_string()));
+        assert_eq!(loaded.last_played_path, Some("/music/b.mp3".to_string()));
+        assert_eq!(loaded.volume_percent, Some(100));
         assert_eq!(loaded.filter_query, Some("abc".to_string()));
         assert_eq!(loaded.shuffle, Some(true));
         assert_eq!(loaded.loop_mode, Some(LoopMode::LoopOne));
@@ -225,6 +265,8 @@ mod tests {
 
         let state = DirectoryState {
             selected_path: Some("/music/b.mp3".to_string()),
+            last_played_path: None,
+            volume_percent: None,
             filter_query: Some("beta".to_string()),
             shuffle: None,
             loop_mode: None,

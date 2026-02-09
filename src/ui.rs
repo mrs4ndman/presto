@@ -2,6 +2,7 @@
 //!
 //! This module contains functions to render the TUI using `ratatui`.
 
+use ratatui::text::Line;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -20,6 +21,7 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map.insert("enter".to_string(), "play selected song".to_string());
     map.insert("space/p".to_string(), "play/pause".to_string());
     map.insert("h/l".to_string(), "prev/next song".to_string());
+    map.insert("g?".to_string(), "controls".to_string());
     // H/L is filled dynamically from config.
     map.insert("-".to_string(), "volume down".to_string());
     map.insert("+".to_string(), "volume up".to_string());
@@ -34,11 +36,13 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
 });
 
 /// Render the controls help text, incorporating scrub seconds.
+///
+/// Uses a fixed order so the footer stays stable even if the map changes.
 fn controls_text(scrub_seconds: u64) -> String {
     // Keep the rendered order stable and human-friendly.
     let order = [
-        "j/k", "h/l", "H/L", "-", "+", "=", "enter", "ctrl+e", "space/p", "gg/G", "K", "/",
-        "s", "r", "q",
+        "j/k", "h/l", "H/L", "-", "+", "=", "enter", "ctrl+e", "space/p", "gg/G", "K", "/", "s",
+        "r", "g?", "q",
     ];
     order
         .iter()
@@ -54,6 +58,8 @@ fn controls_text(scrub_seconds: u64) -> String {
 }
 
 /// Estimate how many wrapped lines `text` will occupy given `max_width`.
+///
+/// This is a lightweight word-wrapping estimator used to reserve layout space.
 fn wrapped_line_count(text: &str, max_width: u16) -> u16 {
     if text.is_empty() || max_width == 0 {
         return 1;
@@ -85,13 +91,118 @@ fn wrapped_line_count(text: &str, max_width: u16) -> u16 {
     lines
 }
 
+/// Wrap text into lines that fit the given width.
+fn wrap_text_lines(text: &str, max_width: u16) -> Vec<String> {
+    if max_width == 0 {
+        return vec![text.to_string()];
+    }
+
+    let width = max_width as usize;
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+
+    let push_current = |lines: &mut Vec<String>, current: &mut String| {
+        if !current.is_empty() {
+            lines.push(std::mem::take(current));
+        }
+    };
+
+    for word in text.split_whitespace() {
+        let word_len = word.chars().count();
+        if current.is_empty() {
+            if word_len <= width {
+                current.push_str(word);
+            } else {
+                let mut chunk = String::new();
+                for ch in word.chars() {
+                    chunk.push(ch);
+                    if chunk.chars().count() == width {
+                        lines.push(chunk);
+                        chunk = String::new();
+                    }
+                }
+                if !chunk.is_empty() {
+                    current.push_str(&chunk);
+                }
+            }
+            continue;
+        }
+
+        let cur_len = current.chars().count();
+        if cur_len + 1 + word_len <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            push_current(&mut lines, &mut current);
+            if word_len <= width {
+                current.push_str(word);
+            } else {
+                let mut chunk = String::new();
+                for ch in word.chars() {
+                    chunk.push(ch);
+                    if chunk.chars().count() == width {
+                        lines.push(chunk);
+                        chunk = String::new();
+                    }
+                }
+                if !chunk.is_empty() {
+                    current.push_str(&chunk);
+                }
+            }
+        }
+    }
+
+    push_current(&mut lines, &mut current);
+
+    if lines.is_empty() {
+        vec![String::new()]
+    } else {
+        lines
+    }
+}
+
+/// Build a wrapped `ListItem` with an optional prefix (line numbers).
+fn list_item_wrapped<T: Into<String>>(prefix: &str, text: T, max_width: u16) -> ListItem<'static> {
+    let text = if prefix.is_empty() {
+        text.into()
+    } else {
+        format!("{}{}", prefix, text.into())
+    };
+    if max_width <= 2 {
+        return ListItem::new(text);
+    }
+
+    let indent_len = prefix.chars().count();
+    let indent = " ".repeat(indent_len);
+    let first_width = max_width;
+    let next_width = max_width.saturating_sub(indent_len as u16).max(1);
+
+    let mut lines = wrap_text_lines(&text, first_width);
+    if lines.len() > 1 {
+        let mut wrapped: Vec<String> = Vec::new();
+        if let Some(first) = lines.first().cloned() {
+            wrapped.push(first);
+        }
+        for line in lines.iter().skip(1) {
+            let mut sub_lines = wrap_text_lines(line, next_width);
+            for sub in sub_lines.drain(..) {
+                wrapped.push(format!("{}{}", indent, sub));
+            }
+        }
+        lines = wrapped;
+    }
+
+    let line_items: Vec<Line> = lines.into_iter().map(Line::from).collect();
+    ListItem::new(line_items)
+}
+
 /// Format a `Duration` as `MM:SS`.
 fn format_mmss(d: Duration) -> String {
     let secs = d.as_secs();
     format!("{:02}:{:02}", secs / 60, secs % 60)
 }
 
-/// Build the status line text.
+/// Build the status line text combining playback and volume data.
 fn status_text(app: &App, ui_settings: &UiSettings) -> String {
     let mut parts: Vec<String> = Vec::new();
 
@@ -107,16 +218,6 @@ fn status_text(app: &App, ui_settings: &UiSettings) -> String {
         crate::audio::LoopMode::LoopOne => "PLAYBACK: Repeat-one",
     };
     parts.push(loop_text.to_string());
-
-    let q = app.filter_query.trim();
-    if app.filter_mode || !q.is_empty() {
-        let mut filter_part = String::from("FILTER:");
-        if !q.is_empty() {
-            filter_part.push_str(" ");
-            filter_part.push_str(q);
-        }
-        parts.push(filter_part);
-    }
 
     if let Some(ref h) = app.playback_handle {
         if let Ok(info) = h.lock() {
@@ -153,7 +254,33 @@ fn status_text(app: &App, ui_settings: &UiSettings) -> String {
         parts.push(format!("Notice: {}", notice));
     }
 
+    parts.push("Help: g?".to_string());
+
     parts.join(" • ")
+}
+
+/// Build the input panel content (filter + count), or none when empty.
+fn bottom_info_text(app: &App) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+
+    let q = app.filter_query.trim();
+    if app.filter_mode || !q.is_empty() {
+        if q.is_empty() {
+            lines.push("Filter: (empty)".to_string());
+        } else {
+            lines.push(format!("Filter: {}", q));
+        }
+    }
+
+    if let Some(count) = app.pending_count {
+        lines.push(format!("Count: {}", count));
+    }
+
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
 }
 
 /// Build the "now playing" track text according to `ui` settings.
@@ -288,11 +415,15 @@ pub fn draw(
     ui_settings: &UiSettings,
     controls_settings: &ControlsSettings,
 ) {
-    let footer_text = controls_text(controls_settings.scrub_seconds);
-    let footer_content_width = frame.area().width.saturating_sub(3).max(1);
-    let footer_height = wrapped_line_count(&footer_text, footer_content_width)
-        .saturating_add(2)
-        .max(3);
+    let bottom_text = bottom_info_text(app);
+    let bottom_height = if let Some(ref text) = bottom_text {
+        let bottom_content_width = frame.area().width.saturating_sub(3).max(1);
+        wrapped_line_count(text, bottom_content_width)
+            .saturating_add(2)
+            .max(3)
+    } else {
+        0
+    };
 
     let status_text_val = status_text(app, ui_settings);
     let status_content_width = frame.area().width.saturating_sub(3).max(1);
@@ -300,15 +431,26 @@ pub fn draw(
         .saturating_add(2)
         .max(3);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(status_height),
-            Constraint::Min(1),
-            Constraint::Length(footer_height),
-        ])
-        .split(frame.area());
+    let chunks = if bottom_height == 0 {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(status_height),
+                Constraint::Min(1),
+            ])
+            .split(frame.area())
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(status_height),
+                Constraint::Min(1),
+                Constraint::Length(bottom_height),
+            ])
+            .split(frame.area())
+    };
 
     // Header
     let header = Paragraph::new(ui_settings.header_text.as_str())
@@ -337,7 +479,23 @@ pub fn draw(
         .wrap(Wrap { trim: true });
     frame.render_widget(status_par, chunks[1]);
 
-    // Main list
+    // Main list (and optional metadata pane)
+    let mut list_area = chunks[2];
+    let mut meta_area: Option<Rect> = None;
+    if app.metadata_window {
+        let meta_width = (list_area.width * 2 / 5).clamp(32, 60);
+        let panes = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Min(20),
+                Constraint::Length(1),
+                Constraint::Length(meta_width),
+            ])
+            .split(list_area);
+        list_area = panes[0];
+        meta_area = Some(panes[2]);
+    }
+
     {
         let q = app.filter_query.trim();
         let query_lower = if q.is_empty() {
@@ -351,7 +509,7 @@ pub fn draw(
         // Center the selected item when possible by creating a visible window.
         // Important: only build ListItems for the visible window (avoid allocating the entire list).
         let total = display.len();
-        let list_height = chunks[2].height as usize;
+        let list_height = list_area.height as usize;
         let sel_pos = display.iter().position(|&i| i == app.selected).unwrap_or(0);
         let (start, end, selected_pos_in_visible) = if total <= list_height || list_height == 0 {
             (0, total, sel_pos)
@@ -364,12 +522,47 @@ pub fn draw(
             (start, start + list_height, sel_pos - start)
         };
 
+        let item_width = list_area.width.saturating_sub(4).max(1);
+        let show_relative = ui_settings.show_relative_numbers;
+        let show_current = ui_settings.show_current_line_number;
+        let number_width = total.to_string().len().max(1);
+
         let visible_items: Vec<ListItem> = display[start..end]
             .iter()
-            .map(|&i| {
+            .enumerate()
+            .map(|(offset, &i)| {
+                let absolute_pos = start + offset;
+                let prefix = if show_relative || show_current {
+                    if show_relative && show_current {
+                        let val = if absolute_pos == sel_pos {
+                            absolute_pos + 1
+                        } else if absolute_pos >= sel_pos {
+                            absolute_pos - sel_pos
+                        } else {
+                            sel_pos - absolute_pos
+                        };
+                        format!("{:>width$} ", val, width = number_width)
+                    } else if show_relative {
+                        if absolute_pos == sel_pos {
+                            " ".repeat(number_width + 1)
+                        } else {
+                            let val = if absolute_pos >= sel_pos {
+                                absolute_pos - sel_pos
+                            } else {
+                                sel_pos - absolute_pos
+                            };
+                            format!("{:>width$} ", val, width = number_width)
+                        }
+                    } else {
+                        let val = absolute_pos + 1;
+                        format!("{:>width$} ", val, width = number_width)
+                    }
+                } else {
+                    String::new()
+                };
                 let title = &app.tracks[i].display;
                 if q.is_empty() {
-                    ListItem::new(title.as_str())
+                    list_item_wrapped(&prefix, title.as_str(), item_width)
                 } else {
                     let positions = match query_lower.as_deref() {
                         Some(ql) => app.fuzzy_match_positions_for_track_lower(i, ql),
@@ -391,9 +584,9 @@ pub fn draw(
                                 rendered.push(ch);
                             }
                         }
-                        ListItem::new(rendered)
+                        list_item_wrapped(&prefix, rendered, item_width)
                     } else {
-                        ListItem::new(title.as_str())
+                        list_item_wrapped(&prefix, title.as_str(), item_width)
                     }
                 }
             })
@@ -407,16 +600,11 @@ pub fn draw(
         if total > 0 {
             state.select(Some(selected_pos_in_visible));
         }
-        frame.render_stateful_widget(list, chunks[2], &mut state);
+        frame.render_stateful_widget(list, list_area, &mut state);
     }
 
-    // Overlay metadata popup (keeps list visible under it)
-    if app.metadata_window {
-        // Keep the popup inside the list area so it doesn't cover header/status/footer.
-        let list_area = chunks[2];
-        let popup_area = centered_rect_sized(72, 9, list_area);
-        frame.render_widget(Clear, popup_area);
-
+    // Metadata side pane
+    if let Some(meta_area) = meta_area {
         let track = app.tracks.get(app.selected);
         let meta = if let Some(track) = track {
             let dur = format_duration_mmss_ceil(track.duration);
@@ -444,22 +632,53 @@ pub fn draw(
                     .title(" metadata (K closes) "),
             )
             .wrap(Wrap { trim: true });
-        frame.render_widget(meta_paragraph, popup_area);
+        frame.render_widget(meta_paragraph, meta_area);
     }
 
-    let footer = Paragraph::new(footer_text)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" controls ")
-                .padding(Padding {
-                    left: 1,
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                }),
-        )
-        .wrap(Wrap { trim: true });
+    // Controls popup (g?)
+    if app.controls_popup {
+        let popup_text = controls_text(controls_settings.scrub_seconds);
+        let max_width = frame.area().width.saturating_sub(4).max(30);
+        let popup_width = ((max_width as u32 * 2) / 3) as u16;
+        let popup_width = popup_width.clamp(30, 80).min(max_width);
+        let popup_content_width = popup_width.saturating_sub(4).max(1);
+        let popup_height = wrapped_line_count(&popup_text, popup_content_width)
+            .saturating_add(4)
+            .max(7);
+        let popup_area = centered_rect_sized(popup_width, popup_height, frame.area());
+        frame.render_widget(Clear, popup_area);
 
-    frame.render_widget(footer, chunks[3]);
+        let popup = Paragraph::new(popup_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" controls (g? closes) ")
+                    .padding(Padding {
+                        left: 1,
+                        right: 1,
+                        top: 1,
+                        bottom: 1,
+                    }),
+            )
+            .wrap(Wrap { trim: true });
+        frame.render_widget(popup, popup_area);
+    }
+
+    if let Some(text) = bottom_text {
+        let bottom_panel = Paragraph::new(text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" input ")
+                    .padding(Padding {
+                        left: 1,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                    }),
+            )
+            .wrap(Wrap { trim: true });
+
+        frame.render_widget(bottom_panel, chunks[3]);
+    }
 }

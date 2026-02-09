@@ -8,7 +8,7 @@ A simple music player TUI written in Rust, with Vim-like controls.
 - `/` filter (type-to-filter track titles)
 - `Ctrl+e` exits filter input without starting playback
 - MPRIS integration for `playerctl` / media keys
-- Per-directory state persistence (selection, filter, shuffle, loop)
+- Per-directory state persistence (selection, filter, shuffle, loop, volume, last track)
 
 ## Getting started
 - Build: `cargo build`
@@ -26,9 +26,8 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
- - [ ] Rethink metadata format + appearence
- - [ ] Relative numbers for `h/j/k/l` jumping of selection & tracks
- - [ ] Store last used volume and track in state (fail softly if missing; select first in shuffled or ordered list)
+- [ ] Extending config validation in the loader and error handling there
+- [ ] Add app-state identifier: FILTER - NAVIGATION - FOLLOWING_PLAYING - etc.
 
 </details>
 
@@ -38,6 +37,7 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 
 - [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Theming
+- [ ] Cross-platform compatibility
 
 </details>
 

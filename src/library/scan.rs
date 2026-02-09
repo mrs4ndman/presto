@@ -9,7 +9,7 @@ use crate::config::LibrarySettings;
 use super::display::display_from_fields;
 use super::model::Track;
 
-// Returns true when `path`'s extension matches configured audio extensions.
+/// Return true when `path`'s extension matches configured audio extensions.
 fn is_audio_file(path: &Path, settings: &LibrarySettings) -> bool {
     let exts: Vec<String> = settings
         .extensions
@@ -27,7 +27,7 @@ fn is_audio_file(path: &Path, settings: &LibrarySettings) -> bool {
         .unwrap_or(false)
 }
 
-// Return true if the path's final component is a hidden (dot) file.
+/// Return true if the path's final component is a hidden (dot) file.
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .and_then(|s| s.to_str())

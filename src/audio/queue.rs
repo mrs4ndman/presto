@@ -4,6 +4,10 @@
 //! kept consistent with the current shuffle `order`. These helpers
 //! reorder and sanitize the queue in place.
 
+/// Sanitize and reorder a queue according to current shuffle order.
+///
+/// Removes out-of-range indices and sorts by shuffle order when enabled,
+/// otherwise sorts ascending to keep a stable deterministic queue.
 pub(crate) fn reorder_queue_in_place(
     queue: &mut Vec<usize>,
     tracks_len: usize,

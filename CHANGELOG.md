@@ -30,3 +30,8 @@
 | 09-02-2026        | Fix: `zz` no longer jumps to track 0 when nothing is playing                            | Uses playback index when available                         |
 | 09-02-2026        | Tweak: State persistence errors include path and surface as UI notice                  | Logged as structured error output                          |
 | 09-02-2026        | Refactor: Extract pure helpers for shuffle reselect and follow playback                | Added targeted unit tests                                  |
+| 09-02-2026        | Feature: Metadata view moved to a right-side pane with wrapping                        | Replaces popup; keeps list visible                          |
+| 09-02-2026        | Feature: Relative/current line numbers with count prefixes for `h/j/k/l`               | Count shows in input panel; current row can be blank         |
+| 09-02-2026        | Feature: Persist last volume and last played track                                     | Applied with soft fallback on missing tracks                |
+| 09-02-2026        | Tweak: Status shows absolute directory path                                             | Useful when launched from relative paths                    |
+| 09-02-2026        | Docs: Expanded config example and UI/controls documentation                            | Includes state toggle and line number options               |

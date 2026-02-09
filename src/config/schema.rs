@@ -17,6 +17,7 @@ pub struct Settings {
     pub controls: ControlsSettings,
     pub playback: PlaybackSettings,
     pub library: LibrarySettings,
+    pub state: StateSettings,
 }
 
 impl Default for Settings {
@@ -27,6 +28,7 @@ impl Default for Settings {
             controls: ControlsSettings::default(),
             playback: PlaybackSettings::default(),
             library: LibrarySettings::default(),
+            state: StateSettings::default(),
         }
     }
 }
@@ -63,6 +65,12 @@ pub struct UiSettings {
     /// Whether the cursor starts in "follow playback" mode.
     pub follow_playback: bool,
 
+    /// Show relative line numbers in the track list.
+    pub show_relative_numbers: bool,
+
+    /// Show the current line number in the track list.
+    pub show_current_line_number: bool,
+
     /// The text rendered inside the top "presto" header box.
     pub header_text: String,
 
@@ -87,6 +95,8 @@ impl Default for UiSettings {
     fn default() -> Self {
         Self {
             follow_playback: true,
+            show_relative_numbers: false,
+            show_current_line_number: false,
             header_text: " ~ And presto! It's music ~ ".to_string(),
             now_playing_track_fields: vec![TrackDisplayField::Display],
             now_playing_track_separator: " - ".to_string(),
@@ -197,6 +207,19 @@ pub struct LibrarySettings {
     pub display_fields: Vec<TrackDisplayField>,
     /// Separator used to join `display_fields`.
     pub display_separator: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct StateSettings {
+    /// Enable per-directory state load/persist.
+    pub enabled: bool,
+}
+
+impl Default for StateSettings {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
 }
 
 impl Default for LibrarySettings {

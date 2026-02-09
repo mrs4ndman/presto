@@ -44,6 +44,8 @@ pub struct EventLoopState {
     pub pending_shuffle_reselect_from: Option<Vec<usize>>,
     /// Internal two-key prefix state used for `gg`/`zz` handling.
     pending_key: PendingKey,
+    /// Pending numeric prefix (Vim-like count), e.g. `10j`.
+    pending_count: Option<u32>,
     /// Last-known playing index as emitted to MPRIS.
     pub last_mpris_index: Option<usize>,
     /// Last-known playback state as emitted to MPRIS.
@@ -56,9 +58,26 @@ impl EventLoopState {
         Self {
             pending_shuffle_reselect_from: None,
             pending_key: PendingKey::default(),
+            pending_count: None,
             last_mpris_index: None,
             last_mpris_playback: app.playback,
         }
+    }
+
+    fn clear_count(&mut self) {
+        self.pending_count = None;
+    }
+
+    fn push_count_digit(&mut self, digit: u32) {
+        let cur = self.pending_count.unwrap_or(0);
+        let next = cur.saturating_mul(10).saturating_add(digit);
+        // Keep counts bounded to avoid huge loops on accidental key spam.
+        self.pending_count = Some(next.min(999));
+    }
+
+    fn take_count_or_default(&mut self) -> usize {
+        let n = self.pending_count.take().unwrap_or(1);
+        n.max(1) as usize
     }
 }
 
@@ -68,6 +87,7 @@ struct FollowUpdate {
     select_index: Option<usize>,
 }
 
+/// Compute whether follow-playback should move the cursor this tick.
 fn follow_playback_update(
     follow_playback: bool,
     filter_mode: bool,
@@ -109,6 +129,7 @@ fn follow_playback_update(
     }
 }
 
+/// Decide whether to reselect the first track after a shuffle reorder.
 fn shuffle_reselect_target(
     pending_from: Option<&[usize]>,
     new_order: Option<&[usize]>,
@@ -207,9 +228,6 @@ pub fn run(
             state.last_mpris_playback = app.playback;
         }
 
-        let display = app.display_indices();
-        terminal.draw(|f| ui::draw(f, app, &display, &settings.ui, &settings.controls))?;
-
         while let Ok(cmd) = control_rx.try_recv() {
             if handle_control_cmd(cmd, settings, app, audio_player, mpris)? {
                 return Ok(());
@@ -226,11 +244,16 @@ pub fn run(
                 }
             }
         }
+
+        sync_pending_count(state, app);
+        let display = app.display_indices();
+        terminal.draw(|f| ui::draw(f, app, &display, &settings.ui, &settings.controls))?;
     }
 
     Ok(())
 }
 
+/// Apply a control command from MPRIS/media keys; return true to quit.
 fn handle_control_cmd(
     cmd: ControlCmd,
     settings: &config::Settings,
@@ -238,6 +261,7 @@ fn handle_control_cmd(
     audio_player: &AudioPlayer,
     mpris: &MprisHandle,
 ) -> Result<bool, Box<dyn std::error::Error>> {
+    // Control commands mirror media key/MPRIS actions; return true to quit.
     match cmd {
         ControlCmd::Quit => {
             audio_player.quit_softly(Duration::from_millis(settings.audio.quit_fade_out_ms));
@@ -333,10 +357,12 @@ struct VolumeControl {
 }
 
 impl VolumeControl {
+    /// Create a volume control with a fixed step percentage.
     fn new(step_percent: u8) -> Self {
         Self { step_percent }
     }
 
+    /// Apply a signed step delta and clamp the result to 0.0..=1.0.
     fn apply_delta(&self, current: f32, delta_sign: f32) -> f32 {
         let step = (self.step_percent as f32) / 100.0;
         if step <= 0.0 {
@@ -347,17 +373,20 @@ impl VolumeControl {
         (current + delta).clamp(0.0, 1.0)
     }
 
+    /// Return true if the new value is materially different.
     fn should_update(&self, current: f32, new: f32) -> bool {
         (new - current).abs() >= f32::EPSILON
     }
 }
 
+/// Apply a volume delta and send it to the audio thread.
 fn adjust_volume(
     app: &mut App,
     audio_player: &AudioPlayer,
     settings: &config::Settings,
     delta_sign: f32,
 ) {
+    // Apply a fixed percentage delta and push the new volume to the audio thread.
     let control = VolumeControl::new(settings.controls.volume_step_percent);
     let new_volume = control.apply_delta(app.volume(), delta_sign);
     if !control.should_update(app.volume(), new_volume) {
@@ -368,11 +397,24 @@ fn adjust_volume(
     let _ = audio_player.send(AudioCmd::SetVolume(new_volume));
 }
 
+/// Reset volume to the initial config value and notify the audio thread.
 fn reset_volume(app: &mut App, audio_player: &AudioPlayer) {
     let new_volume = app.reset_volume_to_initial();
     let _ = audio_player.send(AudioCmd::SetVolume(new_volume));
 }
 
+/// Clear the accumulated count in both the event loop and app state.
+fn clear_pending_count(state: &mut EventLoopState, app: &mut App) {
+    state.clear_count();
+    app.pending_count = None;
+}
+
+/// Sync the event loop's pending count into the app for UI rendering.
+fn sync_pending_count(state: &EventLoopState, app: &mut App) {
+    app.pending_count = state.pending_count;
+}
+
+/// Route key events to the filter or normal handlers.
 fn handle_key_event(
     key: KeyEvent,
     settings: &config::Settings,
@@ -384,11 +426,22 @@ fn handle_key_event(
 ) -> Result<bool, Box<dyn std::error::Error>> {
     if app.filter_mode {
         state.pending_key.clear();
+        if let KeyCode::Char(c) = key.code {
+            if c.is_ascii_digit() && !key.modifiers.contains(KeyModifiers::CONTROL) {
+                let digit = c.to_digit(10).unwrap_or(0);
+                if state.pending_count.is_some() || app.filter_query.trim().is_empty() {
+                    state.push_count_digit(digit);
+                    sync_pending_count(state, app);
+                    return Ok(false);
+                }
+            }
+        }
         return handle_filter_key_event(key, app, audio_player, mpris);
     }
     handle_normal_key_event(key, settings, app, audio_player, mpris, control_tx, state)
 }
 
+/// Handle key events while the filter input is active.
 fn handle_filter_key_event(
     key: KeyEvent,
     app: &mut App,
@@ -452,6 +505,7 @@ fn handle_filter_key_event(
     Ok(false)
 }
 
+/// Handle key events in normal (non-filter) mode.
 fn handle_normal_key_event(
     key: KeyEvent,
     settings: &config::Settings,
@@ -462,10 +516,29 @@ fn handle_normal_key_event(
     state: &mut EventLoopState,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     match key.code {
+        KeyCode::Esc => {
+            if app.controls_popup {
+                app.toggle_controls_popup();
+            }
+            state.pending_key.clear();
+            clear_pending_count(state, app);
+        }
         KeyCode::Char('q') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             audio_player.quit_softly(Duration::from_millis(settings.audio.quit_fade_out_ms));
             return Ok(true);
+        }
+        KeyCode::Char(c)
+            if c.is_ascii_digit() && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            let digit = c.to_digit(10).unwrap_or(0);
+            if digit != 0 || state.pending_count.is_some() {
+                state.pending_key.clear();
+                state.push_count_digit(digit);
+                sync_pending_count(state, app);
+                return Ok(false);
+            }
         }
         KeyCode::Char('/') => {
             state.pending_key.clear();
@@ -474,6 +547,7 @@ fn handle_normal_key_event(
         }
         KeyCode::Char('s') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             let turning_on = !app.shuffle;
             if turning_on {
                 state.pending_shuffle_reselect_from = app
@@ -495,11 +569,13 @@ fn handle_normal_key_event(
         }
         KeyCode::Char('r') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             app.cycle_loop_mode();
             let _ = audio_player.send(AudioCmd::SetLoopMode(app.loop_mode));
             update_mpris(mpris, app);
         }
         KeyCode::Char('z') => {
+            clear_pending_count(state, app);
             if state.pending_key.take_if('z') {
                 let track_id = app
                     .playback_handle
@@ -514,6 +590,7 @@ fn handle_normal_key_event(
             }
         }
         KeyCode::Char('g') => {
+            clear_pending_count(state, app);
             if state.pending_key.take_if('g') {
                 app.follow_playback_off();
                 let display = app.display_indices();
@@ -525,8 +602,17 @@ fn handle_normal_key_event(
                 state.pending_key.set('g');
             }
         }
+        KeyCode::Char('?') => {
+            if state.pending_key.take_if('g') {
+                clear_pending_count(state, app);
+                app.toggle_controls_popup();
+            } else {
+                state.pending_key.clear();
+            }
+        }
         KeyCode::Char('G') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             let display = app.display_indices();
             if let Some(&last) = display.last() {
                 app.set_selected(last);
@@ -535,18 +621,27 @@ fn handle_normal_key_event(
         }
         KeyCode::Char('j') => {
             state.pending_key.clear();
+            let count = state.take_count_or_default();
+            app.pending_count = None;
             app.follow_playback_off();
-            app.next();
+            for _ in 0..count {
+                app.next();
+            }
             update_mpris(mpris, app);
         }
         KeyCode::Char('k') => {
             state.pending_key.clear();
+            let count = state.take_count_or_default();
+            app.pending_count = None;
             app.follow_playback_off();
-            app.prev();
+            for _ in 0..count {
+                app.prev();
+            }
             update_mpris(mpris, app);
         }
         KeyCode::Enter => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             if app.has_tracks() {
                 let is_playing_selected = app.playback == PlaybackState::Playing
                     && app
@@ -566,46 +661,62 @@ fn handle_normal_key_event(
         }
         KeyCode::Char('p') | KeyCode::Char(' ') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             let _ = control_tx.send(ControlCmd::PlayPause);
         }
         KeyCode::Char('l') => {
             state.pending_key.clear();
-            let _ = control_tx.send(ControlCmd::Next);
+            let count = state.take_count_or_default();
+            app.pending_count = None;
+            for _ in 0..count {
+                let _ = control_tx.send(ControlCmd::Next);
+            }
         }
         KeyCode::Char('h') => {
             state.pending_key.clear();
-            let _ = control_tx.send(ControlCmd::Prev);
+            let count = state.take_count_or_default();
+            app.pending_count = None;
+            for _ in 0..count {
+                let _ = control_tx.send(ControlCmd::Prev);
+            }
         }
         KeyCode::Char('-') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             adjust_volume(app, audio_player, settings, -1.0);
         }
         KeyCode::Char('+') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             adjust_volume(app, audio_player, settings, 1.0);
         }
         KeyCode::Char('=') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             reset_volume(app, audio_player);
         }
         KeyCode::Char('L') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             let secs = settings.controls.scrub_seconds.min(i32::MAX as u64) as i32;
             let _ = audio_player.send(AudioCmd::SeekBy(secs));
         }
         KeyCode::Char('H') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             let secs = settings.controls.scrub_seconds.min(i32::MAX as u64) as i32;
             let _ = audio_player.send(AudioCmd::SeekBy(-secs));
         }
         KeyCode::Char('K') => {
             state.pending_key.clear();
+            clear_pending_count(state, app);
             app.toggle_metadata_window();
             update_mpris(mpris, app);
         }
         KeyCode::Char(_) => {
             // pending should clear on any other printable char
             state.pending_key.clear();
+            clear_pending_count(state, app);
         }
         _ => {}
     }

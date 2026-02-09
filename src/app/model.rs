@@ -44,11 +44,18 @@ pub struct App {
     pub current_dir: Option<String>,
     pub metadata_window: bool,
     pub notice: Option<String>,
+    pub pending_count: Option<u32>,
+    pub controls_popup: bool,
 }
 
 impl App {
+    /// Toggle the metadata popup visibility.
     pub fn toggle_metadata_window(&mut self) {
         self.metadata_window = !self.metadata_window;
+    }
+    /// Toggle the controls popup visibility.
+    pub fn toggle_controls_popup(&mut self) {
+        self.controls_popup = !self.controls_popup;
     }
     /// Create a new `App` with the provided list of `tracks`.
     pub fn new(tracks: Vec<Track>) -> Self {
@@ -87,6 +94,8 @@ impl App {
             current_dir: None,
             metadata_window: false,
             notice: None,
+            pending_count: None,
+            controls_popup: false,
         }
     }
 
@@ -315,6 +324,7 @@ impl App {
         Some(positions)
     }
 
+    /// Lowercase-only fuzzy match optimized for pre-lowered strings.
     fn fuzzy_match_positions_lower(title_lower: &str, query_lower: &str) -> Option<Vec<usize>> {
         if query_lower.is_empty() {
             return Some(Vec::new());

@@ -42,6 +42,7 @@ pub struct MprisHandle {
 }
 
 impl MprisHandle {
+    /// Update playback state and notify MPRIS listeners of a change.
     pub fn set_playback(&self, playback: PlaybackState) {
         if let Ok(mut s) = self.state.lock() {
             s.playback = playback;
@@ -50,7 +51,9 @@ impl MprisHandle {
     }
 
     /// Update the metadata for the currently loaded track (index optional).
-    /// Passing `None` for `track` clears metadata fields.
+    ///
+    /// Passing `None` clears fields and emits a change notification. When an
+    /// index is provided we also synthesize a stable MPRIS track id.
     pub fn set_track_metadata(&self, idx: Option<usize>, track: Option<&Track>) {
         if let Ok(mut s) = self.state.lock() {
             if let Some(t) = track {
@@ -241,6 +244,11 @@ impl PlayerIface {
     }
 }
 
+/// Spawn the MPRIS DBus service thread and return a handle for updates.
+///
+/// The returned `MprisHandle` can be used from the runtime thread to push
+/// playback and metadata changes which are coalesced into PropertiesChanged
+/// signals on a short polling timer.
 pub fn spawn_mpris(tx: Sender<ControlCmd>) -> MprisHandle {
     let state = Arc::new(Mutex::new(SharedState::default()));
     let (notify_tx, notify_rx) = std::sync::mpsc::channel::<()>();

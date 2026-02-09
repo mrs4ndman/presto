@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::mpris::MprisHandle;
 
+/// Push current app playback and metadata into the MPRIS service.
 pub fn update_mpris(mpris: &MprisHandle, app: &App) {
     let now_playing_idx = if let Some(ref handle) = app.playback_handle {
         handle.lock().ok().and_then(|info| info.index)

@@ -10,6 +10,11 @@ This is the complete keyboard reference for Presto.
 - `gg`: jump to top
 - `G`: jump to bottom
 
+Count prefixes:
+
+- Prefix a number to repeat movement: `10j`, `3k`, `2h`, `4l`.
+- The current count shows in the bottom input panel while you type it.
+
 ## Playback
 
 - `Enter`: play selected track (no-op if it’s already the current track)
@@ -38,8 +43,13 @@ Notes:
 
 Notes:
 
-- The metadata view is a popup overlay; the track list stays visible underneath.
-- The popup is intentionally small. If the path/fields are long, they will wrap.
+- The metadata view is a right-side pane; the track list stays visible on the left.
+- Long fields wrap within the pane.
+
+## Controls popup
+
+- `g?`: toggle the controls popup
+- `Esc`: close the popup
 
 ## Filtering (search)
 
@@ -52,6 +62,18 @@ Notes:
   - `Ctrl-e`: exit filter mode without playing (filter stays active)
   - `Ctrl-n` / `Ctrl-j`: move selection down within the filtered results
   - `Ctrl-p` / `Ctrl-k`: move selection up within the filtered results
+
+Notes:
+
+- If the filter is empty, typing digits starts a count prefix instead of inserting digits.
+
+## Line numbers
+
+Line numbers for the track list are configurable in `config.toml`:
+
+- Relative only (blank on the current row)
+- Absolute current line only
+- Hybrid (current line number + relative for other rows)
 
 ## Cursor behavior
 
