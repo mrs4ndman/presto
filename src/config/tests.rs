@@ -193,3 +193,22 @@ crossfade_ms = 250
     let s = Settings::load().unwrap();
     assert_eq!(s.audio.crossfade_ms, 0);
 }
+
+#[test]
+fn settings_validate_reports_invalid_values() {
+    let mut s = Settings::default();
+    s.audio.crossfade_steps = 0;
+    s.audio.initial_volume_percent = 101;
+    s.controls.scrub_seconds = 0;
+    s.controls.volume_step_percent = 0;
+    s.library.extensions = vec!["".to_string()];
+    s.library.max_depth = Some(0);
+
+    let err = s.validate().unwrap_err();
+    assert!(err.contains("audio.crossfade_steps"));
+    assert!(err.contains("audio.initial_volume_percent"));
+    assert!(err.contains("controls.scrub_seconds"));
+    assert!(err.contains("controls.volume_step_percent"));
+    assert!(err.contains("library.extensions"));
+    assert!(err.contains("library.max_depth"));
+}

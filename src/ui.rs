@@ -61,34 +61,10 @@ fn controls_text(scrub_seconds: u64) -> String {
 ///
 /// This is a lightweight word-wrapping estimator used to reserve layout space.
 fn wrapped_line_count(text: &str, max_width: u16) -> u16 {
-    if text.is_empty() || max_width == 0 {
-        return 1;
-    }
-
-    let mut lines: u16 = 1;
-    let mut line_width: u16 = 0;
-
-    for word in text.split_whitespace() {
-        let word_width = word.chars().count() as u16;
-        if line_width == 0 {
-            lines += word_width.saturating_sub(1) / max_width;
-            line_width = word_width % max_width;
-            if line_width == 0 {
-                line_width = max_width.min(word_width);
-            }
-        } else if line_width + 1 + word_width <= max_width {
-            line_width += 1 + word_width;
-        } else {
-            lines += 1;
-            lines += word_width.saturating_sub(1) / max_width;
-            line_width = word_width % max_width;
-            if line_width == 0 {
-                line_width = max_width.min(word_width);
-            }
-        }
-    }
-
-    lines
+    wrap_text_lines(text, max_width)
+        .len()
+        .try_into()
+        .unwrap_or(1)
 }
 
 /// Wrap text into lines that fit the given width.
@@ -100,59 +76,133 @@ fn wrap_text_lines(text: &str, max_width: u16) -> Vec<String> {
     let width = max_width as usize;
     let mut lines: Vec<String> = Vec::new();
     let mut current = String::new();
+    let mut current_len: usize = 0;
 
-    let push_current = |lines: &mut Vec<String>, current: &mut String| {
+    let mut token = String::new();
+    let mut token_is_ws: Option<bool> = None;
+
+    fn flush_current(lines: &mut Vec<String>, current: &mut String, current_len: &mut usize) {
         if !current.is_empty() {
             lines.push(std::mem::take(current));
+            *current_len = 0;
         }
-    };
+    }
 
-    for word in text.split_whitespace() {
-        let word_len = word.chars().count();
-        if current.is_empty() {
-            if word_len <= width {
-                current.push_str(word);
-            } else {
-                let mut chunk = String::new();
-                for ch in word.chars() {
-                    chunk.push(ch);
-                    if chunk.chars().count() == width {
-                        lines.push(chunk);
-                        chunk = String::new();
-                    }
-                }
-                if !chunk.is_empty() {
-                    current.push_str(&chunk);
-                }
+    fn push_token(
+        lines: &mut Vec<String>,
+        current: &mut String,
+        current_len: &mut usize,
+        token: &str,
+        is_ws: bool,
+        width: usize,
+    ) {
+        if token.is_empty() {
+            return;
+        }
+
+        let token_len = token.chars().count();
+        if is_ws && *current_len == 0 {
+            return;
+        }
+
+        if *current_len + token_len <= width {
+            current.push_str(token);
+            *current_len += token_len;
+            return;
+        }
+
+        if is_ws {
+            flush_current(lines, current, current_len);
+            return;
+        }
+
+        if *current_len > 0 {
+            flush_current(lines, current, current_len);
+        }
+
+        if token_len <= width {
+            current.push_str(token);
+            *current_len = token_len;
+            return;
+        }
+
+        let mut chunk = String::new();
+        let mut chunk_len: usize = 0;
+        for ch in token.chars() {
+            chunk.push(ch);
+            chunk_len += 1;
+            if chunk_len == width {
+                lines.push(chunk);
+                chunk = String::new();
+                chunk_len = 0;
             }
+        }
+
+        if !chunk.is_empty() {
+            current.push_str(&chunk);
+            *current_len = chunk_len;
+        }
+    }
+
+    for ch in text.chars() {
+        if ch == '\n' {
+            if let Some(is_ws) = token_is_ws {
+                let tok = std::mem::take(&mut token);
+                push_token(
+                    &mut lines,
+                    &mut current,
+                    &mut current_len,
+                    &tok,
+                    is_ws,
+                    width,
+                );
+                token_is_ws = None;
+            }
+            flush_current(&mut lines, &mut current, &mut current_len);
+            lines.push(String::new());
             continue;
         }
 
-        let cur_len = current.chars().count();
-        if cur_len + 1 + word_len <= width {
-            current.push(' ');
-            current.push_str(word);
-        } else {
-            push_current(&mut lines, &mut current);
-            if word_len <= width {
-                current.push_str(word);
-            } else {
-                let mut chunk = String::new();
-                for ch in word.chars() {
-                    chunk.push(ch);
-                    if chunk.chars().count() == width {
-                        lines.push(chunk);
-                        chunk = String::new();
-                    }
-                }
-                if !chunk.is_empty() {
-                    current.push_str(&chunk);
-                }
+        let is_ws = ch.is_whitespace();
+        match token_is_ws {
+            Some(prev_ws) if prev_ws != is_ws => {
+                let tok = std::mem::take(&mut token);
+                push_token(
+                    &mut lines,
+                    &mut current,
+                    &mut current_len,
+                    &tok,
+                    prev_ws,
+                    width,
+                );
+                token.push(ch);
+                token_is_ws = Some(is_ws);
+            }
+            None => {
+                token.push(ch);
+                token_is_ws = Some(is_ws);
+            }
+            _ => {
+                token.push(ch);
             }
         }
     }
 
-    push_current(&mut lines, &mut current);
+    if let Some(is_ws) = token_is_ws {
+        let tok = std::mem::take(&mut token);
+        push_token(
+            &mut lines,
+            &mut current,
+            &mut current_len,
+            &tok,
+            is_ws,
+            width,
+        );
+    }
+
+    if !current.is_empty() {
+        lines.push(current);
+    }
 
     if lines.is_empty() {
         vec![String::new()]
@@ -206,6 +256,15 @@ fn format_mmss(d: Duration) -> String {
 fn status_text(app: &App, ui_settings: &UiSettings) -> String {
     let mut parts: Vec<String> = Vec::new();
 
+    let state = if app.filter_mode {
+        "FILTER"
+    } else if app.follow_playback {
+        "FOLLOWING_PLAYING"
+    } else {
+        "NAVIGATION"
+    };
+    parts.push(format!("STATE: {}", state));
+
     if app.follow_playback {
         parts.push(" CURSOR: Follow".to_string());
     } else {
@@ -257,6 +316,17 @@ fn status_text(app: &App, ui_settings: &UiSettings) -> String {
     parts.push("Help: g?".to_string());
 
     parts.join(" • ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrap_text_lines;
+
+    #[test]
+    fn wrap_text_preserves_multiple_spaces() {
+        let lines = wrap_text_lines("Artist  Title", 50);
+        assert_eq!(lines, vec!["Artist  Title".to_string()]);
+    }
 }
 
 /// Build the input panel content (filter + count), or none when empty.

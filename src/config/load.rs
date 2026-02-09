@@ -30,10 +30,49 @@ impl Settings {
 
     /// Perform basic validation checks on loaded settings.
     pub fn validate(&self) -> Result<(), String> {
+        let mut errors: Vec<String> = Vec::new();
+
         if self.audio.crossfade_steps == 0 {
-            return Err("audio.crossfade_steps must be >= 1".to_string());
+            errors.push("audio.crossfade_steps must be >= 1".to_string());
         }
-        Ok(())
+        if self.audio.initial_volume_percent > 100 {
+            errors.push("audio.initial_volume_percent must be between 0 and 100".to_string());
+        }
+        if self.controls.scrub_seconds == 0 {
+            errors.push("controls.scrub_seconds must be >= 1".to_string());
+        }
+        if self.controls.volume_step_percent == 0 {
+            errors.push("controls.volume_step_percent must be >= 1".to_string());
+        }
+        if self.controls.volume_step_percent > 100 {
+            errors.push("controls.volume_step_percent must be <= 100".to_string());
+        }
+        if let Some(depth) = self.library.max_depth {
+            if depth == 0 {
+                errors.push("library.max_depth must be >= 1".to_string());
+            }
+        }
+
+        let trimmed_exts: Vec<&str> = self
+            .library
+            .extensions
+            .iter()
+            .map(|e| e.trim().trim_start_matches('.'))
+            .filter(|e| !e.is_empty())
+            .collect();
+
+        if trimmed_exts.is_empty() {
+            errors.push("library.extensions must include at least one non-empty extension"
+                .to_string());
+        } else if trimmed_exts.len() != self.library.extensions.len() {
+            errors.push("library.extensions must not contain empty entries".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("invalid config:\n- {}", errors.join("\n- ")))
+        }
     }
 }
 

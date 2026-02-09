@@ -26,8 +26,7 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- [ ] Extending config validation in the loader and error handling there
-- [ ] Add app-state identifier: FILTER - NAVIGATION - FOLLOWING_PLAYING - etc.
+- (none for now)
 
 </details>
 

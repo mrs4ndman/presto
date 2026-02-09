@@ -35,3 +35,6 @@
 | 09-02-2026        | Feature: Persist last volume and last played track                                     | Applied with soft fallback on missing tracks                |
 | 09-02-2026        | Tweak: Status shows absolute directory path                                             | Useful when launched from relative paths                    |
 | 09-02-2026        | Docs: Expanded config example and UI/controls documentation                            | Includes state toggle and line number options               |
+| 09-02-2026        | Fix: Preserve multi-space display separators in the track list                          | Whitespace is no longer collapsed in wrapped list items      |
+| 09-02-2026        | Tweak: Expand config validation and reporting                                           | Flags invalid ranges and empty extension lists              |
+| 09-02-2026        | Tweak: Add UI app-state indicator in the status line                                    | Shows FILTER / NAVIGATION / FOLLOWING_PLAYING               |
