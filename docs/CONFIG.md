@@ -44,10 +44,12 @@ Defaults:
 - `crossfade_ms` (u64, milliseconds): crossfade when switching tracks (`0` disables)
 - `crossfade_steps` (u64): number of fade steps (must be `>= 1`)
 - `quit_fade_out_ms` (u64, milliseconds): fade out on quit (`0` disables)
+- `initial_volume_percent` (u8, 0-100): starting volume level
 
 ### `[controls]`
 
 - `scrub_seconds` (u64): seconds to seek when pressing `H` / `L`
+- `volume_step_percent` (u8): percentage points to change volume per `-` / `+` press
 
 ### `[ui]`
 

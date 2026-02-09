@@ -6,7 +6,9 @@ A simple music player TUI written in Rust, with Vim-like controls.
 - Directory scan of common audio files (`mp3`, `flac`, `wav`, `ogg`)
 - Keyboard-driven TUI with Vim-like controls
 - `/` filter (type-to-filter track titles)
+- `Ctrl+e` exits filter input without starting playback
 - MPRIS integration for `playerctl` / media keys
+- Per-directory state persistence (selection, filter, shuffle, loop)
 
 ## Getting started
 - Build: `cargo build`
@@ -24,8 +26,9 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- [ ] Make controls content expand its section when wrapping
-- [ ] Rethink metadata format + appearence
+ - [ ] Rethink metadata format + appearence
+ - [ ] Relative numbers for `h/j/k/l` jumping of selection & tracks
+ - [ ] Store last used volume and track in state (fail softly if missing; select first in shuffled or ordered list)
 
 </details>
 
@@ -33,10 +36,8 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- [ ] Restoring previous state after exiting (per-directory)
 - [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Theming
-- [ ] Make `presto` have its own volume controls
 
 </details>
 

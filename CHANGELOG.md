@@ -22,3 +22,11 @@
 | 04-02-2026        | Bug: Auto-locating to the top after shuffle only worked after moving around the cursor |                                                           |
 | 05-02-2026        | Feature: `zz` functionality to reselect & center currently playing song                |                                                           |
 | 06-02-2026        | Tweak: Pad shown data in the UI on the sides with 1 space on the left                  |                                                           |
+| 09-02-2026        | Feature: Persist per-directory selection, filter, shuffle, loop, follow-playback      | Stored in `state.toml` next to config                      |
+| 09-02-2026        | Tweak: Make status/footer wrapping aware of terminal width                             | Prevents corruption on narrow widths                       |
+| 09-02-2026        | Tweak: Volume controls remapped (`-` down, `+` up, `=` reset to initial)               | Initial volume uses config default (50%)                   |
+| 09-02-2026        | Testing: Expanded unit coverage for volume helpers and state persistence               |                                                           |
+| 09-02-2026        | Tweak: Ctrl+E exits filter input without starting playback                             | Filter remains active                                      |
+| 09-02-2026        | Fix: `zz` no longer jumps to track 0 when nothing is playing                            | Uses playback index when available                         |
+| 09-02-2026        | Tweak: State persistence errors include path and surface as UI notice                  | Logged as structured error output                          |
+| 09-02-2026        | Refactor: Extract pure helpers for shuffle reselect and follow playback                | Added targeted unit tests                                  |

@@ -102,9 +102,11 @@ loop_mode = "repeat-one"
 crossfade_ms = 0
 crossfade_steps = 3
 quit_fade_out_ms = 123
+initial_volume_percent = 80
 
 [controls]
 scrub_seconds = 9
+volume_step_percent = 7
 
 [ui]
 follow_playback = false
@@ -134,23 +136,40 @@ display_separator = "::"
     assert_eq!(s.audio.crossfade_ms, 0);
     assert_eq!(s.audio.crossfade_steps, 3);
     assert_eq!(s.audio.quit_fade_out_ms, 123);
+    assert_eq!(s.audio.initial_volume_percent, 80);
     assert_eq!(s.controls.scrub_seconds, 9);
+    assert_eq!(s.controls.volume_step_percent, 7);
     assert!(!s.ui.follow_playback);
     assert_eq!(s.ui.header_text, "hello");
     assert_eq!(s.ui.now_playing_track_fields.len(), 2);
-    assert!(matches!(s.ui.now_playing_track_fields[0], TrackDisplayField::Artist));
-    assert!(matches!(s.ui.now_playing_track_fields[1], TrackDisplayField::Title));
+    assert!(matches!(
+        s.ui.now_playing_track_fields[0],
+        TrackDisplayField::Artist
+    ));
+    assert!(matches!(
+        s.ui.now_playing_track_fields[1],
+        TrackDisplayField::Title
+    ));
     assert_eq!(s.ui.now_playing_track_separator, " • ");
     assert_eq!(s.ui.now_playing_time_fields.len(), 2);
-    assert!(matches!(s.ui.now_playing_time_fields[0], TimeField::Elapsed));
-    assert!(matches!(s.ui.now_playing_time_fields[1], TimeField::Remaining));
+    assert!(matches!(
+        s.ui.now_playing_time_fields[0],
+        TimeField::Elapsed
+    ));
+    assert!(matches!(
+        s.ui.now_playing_time_fields[1],
+        TimeField::Remaining
+    ));
     assert_eq!(s.ui.now_playing_time_separator, " | ");
     assert_eq!(s.library.extensions, vec!["mp3".to_string()]);
     assert!(!s.library.recursive);
     assert!(!s.library.include_hidden);
     assert!(!s.library.follow_links);
     assert_eq!(s.library.display_separator, "::");
-    assert!(matches!(s.library.display_fields[0], TrackDisplayField::Filename));
+    assert!(matches!(
+        s.library.display_fields[0],
+        TrackDisplayField::Filename
+    ));
 }
 
 #[test]

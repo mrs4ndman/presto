@@ -121,3 +121,43 @@ fn queue_dirty_is_set_on_filter_changes() {
     app.pop_filter_char();
     assert!(app.queue_dirty);
 }
+
+#[test]
+fn initial_volume_percent_sets_current_and_initial() {
+    let mut app = App::new(Vec::new());
+    let v = app.set_initial_volume_percent(30);
+    assert!((v - 0.30).abs() < f32::EPSILON);
+    assert!((app.volume() - 0.30).abs() < f32::EPSILON);
+}
+
+#[test]
+fn initial_volume_percent_clamps_out_of_range() {
+    let mut app = App::new(Vec::new());
+    let v = app.set_initial_volume_percent(250);
+    assert!((v - 1.0).abs() < f32::EPSILON);
+    assert!((app.volume() - 1.0).abs() < f32::EPSILON);
+
+    let v = app.set_initial_volume_percent(0);
+    assert!((v - 0.0).abs() < f32::EPSILON);
+    assert!((app.volume() - 0.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn reset_volume_restores_initial_value() {
+    let mut app = App::new(Vec::new());
+    app.set_initial_volume_percent(75);
+    app.set_volume(0.20);
+    let v = app.reset_volume_to_initial();
+    assert!((v - 0.75).abs() < f32::EPSILON);
+    assert!((app.volume() - 0.75).abs() < f32::EPSILON);
+}
+
+#[test]
+fn volume_percent_rounds_to_nearest_whole() {
+    let mut app = App::new(Vec::new());
+    app.set_volume(0.444);
+    assert_eq!(app.volume_percent(), 44);
+
+    app.set_volume(0.445);
+    assert_eq!(app.volume_percent(), 45);
+}

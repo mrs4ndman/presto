@@ -14,10 +14,14 @@ crossfade_ms = 250
 crossfade_steps = 10
 # Quit fade-out duration. Set to 0 to stop immediately.
 quit_fade_out_ms = 500
+# Starting volume (0-100%)
+initial_volume_percent = 50
 
 [controls]
 # `H` / `L` seek step
 scrub_seconds = 5
+# Volume step per keypress (percentage points)
+volume_step_percent = 5
 
 [ui]
 # Start with selection following the currently playing track

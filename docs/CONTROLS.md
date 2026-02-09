@@ -18,6 +18,9 @@ This is the complete keyboard reference for Presto.
 - `l`: next track
 - `H`: scrub backward (default 5s; configurable)
 - `L`: scrub forward (default 5s; configurable)
+- `-`: volume down
+- `+`: volume up
+- `=`: reset volume to the initial level
 - `r`: cycle loop mode (LoopAll → LoopOne → NoLoop)
 - `s`: toggle shuffle
 - `q`: quit (soft fade-out)
@@ -25,6 +28,8 @@ This is the complete keyboard reference for Presto.
 Notes:
 
 - Scrub amount is controlled by `controls.scrub_seconds` in the config file.
+- Volume step is controlled by `controls.volume_step_percent`; the starting level comes from
+  `audio.initial_volume_percent`.
 - Default loop mode is LoopAll (loop-around) unless overridden in config.
 
 ## Metadata
@@ -44,6 +49,7 @@ Notes:
   - `Backspace`: delete
   - `Esc`: clear filter and exit filter mode
   - `Enter`: play the selected match and exit filter mode
+  - `Ctrl-e`: exit filter mode without playing (filter stays active)
   - `Ctrl-n` / `Ctrl-j`: move selection down within the filtered results
   - `Ctrl-p` / `Ctrl-k`: move selection up within the filtered results
 
