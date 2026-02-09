@@ -21,6 +21,10 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map.insert("space/p".to_string(), "play/pause".to_string());
     map.insert("h/l".to_string(), "prev/next song".to_string());
     // H/L is filled dynamically from config.
+    map.insert("-".to_string(), "volume down".to_string());
+    map.insert("+".to_string(), "volume up".to_string());
+    map.insert("=".to_string(), "volume reset".to_string());
+    map.insert("ctrl+e".to_string(), "exit filter input".to_string());
     map.insert("/".to_string(), "filter".to_string());
     map.insert("s".to_string(), "shuffle".to_string());
     map.insert("r".to_string(), "loop mode".to_string());
@@ -33,7 +37,8 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
 fn controls_text(scrub_seconds: u64) -> String {
     // Keep the rendered order stable and human-friendly.
     let order = [
-        "j/k", "h/l", "H/L", "enter", "space/p", "gg/G", "K", "/", "s", "r", "q",
+        "j/k", "h/l", "H/L", "-", "+", "=", "enter", "ctrl+e", "space/p", "gg/G", "K", "/",
+        "s", "r", "q",
     ];
     order
         .iter()
@@ -48,10 +53,107 @@ fn controls_text(scrub_seconds: u64) -> String {
         .join(" | ")
 }
 
+/// Estimate how many wrapped lines `text` will occupy given `max_width`.
+fn wrapped_line_count(text: &str, max_width: u16) -> u16 {
+    if text.is_empty() || max_width == 0 {
+        return 1;
+    }
+
+    let mut lines: u16 = 1;
+    let mut line_width: u16 = 0;
+
+    for word in text.split_whitespace() {
+        let word_width = word.chars().count() as u16;
+        if line_width == 0 {
+            lines += word_width.saturating_sub(1) / max_width;
+            line_width = word_width % max_width;
+            if line_width == 0 {
+                line_width = max_width.min(word_width);
+            }
+        } else if line_width + 1 + word_width <= max_width {
+            line_width += 1 + word_width;
+        } else {
+            lines += 1;
+            lines += word_width.saturating_sub(1) / max_width;
+            line_width = word_width % max_width;
+            if line_width == 0 {
+                line_width = max_width.min(word_width);
+            }
+        }
+    }
+
+    lines
+}
+
 /// Format a `Duration` as `MM:SS`.
 fn format_mmss(d: Duration) -> String {
     let secs = d.as_secs();
     format!("{:02}:{:02}", secs / 60, secs % 60)
+}
+
+/// Build the status line text.
+fn status_text(app: &App, ui_settings: &UiSettings) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    if app.follow_playback {
+        parts.push(" CURSOR: Follow".to_string());
+    } else {
+        parts.push(" CURSOR: Free-roam".to_string());
+    }
+
+    let loop_text = match app.loop_mode {
+        crate::audio::LoopMode::NoLoop => "PLAYBACK: No-loop",
+        crate::audio::LoopMode::LoopAll => "PLAYBACK: Loop-around",
+        crate::audio::LoopMode::LoopOne => "PLAYBACK: Repeat-one",
+    };
+    parts.push(loop_text.to_string());
+
+    let q = app.filter_query.trim();
+    if app.filter_mode || !q.is_empty() {
+        let mut filter_part = String::from("FILTER:");
+        if !q.is_empty() {
+            filter_part.push_str(" ");
+            filter_part.push_str(q);
+        }
+        parts.push(filter_part);
+    }
+
+    if let Some(ref h) = app.playback_handle {
+        if let Ok(info) = h.lock() {
+            let state = if info.playing { "Playing" } else { "Paused" };
+            if let Some(idx) = info.index {
+                let track = &app.tracks[idx];
+                let song = now_playing_track_text(app, idx, ui_settings);
+                let time = now_playing_time_text(info.elapsed, track.duration, ui_settings);
+                if let Some(time) = time {
+                    parts.push(format!("Song: {} [{}]", song, time));
+                } else {
+                    parts.push(format!("Song: {}", song));
+                }
+                parts.push(state.to_string());
+            } else {
+                parts.push("Stopped".to_string());
+            }
+        }
+    }
+
+    if app.shuffle {
+        parts.push("Shuffle: ON".to_string());
+    } else {
+        parts.push("Shuffle: OFF".to_string());
+    }
+
+    parts.push(format!("Vol: {}%", app.volume_percent()));
+
+    if let Some(dir) = &app.current_dir {
+        parts.push(format!("Dir: {}", dir));
+    }
+
+    if let Some(notice) = &app.notice {
+        parts.push(format!("Notice: {}", notice));
+    }
+
+    parts.join(" • ")
 }
 
 /// Build the "now playing" track text according to `ui` settings.
@@ -186,15 +288,28 @@ pub fn draw(
     ui_settings: &UiSettings,
     controls_settings: &ControlsSettings,
 ) {
+    let footer_text = controls_text(controls_settings.scrub_seconds);
+    let footer_content_width = frame.area().width.saturating_sub(3).max(1);
+    let footer_height = wrapped_line_count(&footer_text, footer_content_width)
+        .saturating_add(2)
+        .max(3);
+
+    let status_text_val = status_text(app, ui_settings);
+    let status_content_width = frame.area().width.saturating_sub(3).max(1);
+    let status_height = wrapped_line_count(&status_text_val, status_content_width)
+        .saturating_add(2)
+        .max(3);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
-            Constraint::Length(5),
+            Constraint::Length(status_height),
             Constraint::Min(1),
-            Constraint::Length(4),
+            Constraint::Length(footer_height),
         ])
         .split(frame.area());
+
     // Header
     let header = Paragraph::new(ui_settings.header_text.as_str())
         .alignment(Alignment::Center)
@@ -206,72 +321,8 @@ pub fn draw(
         );
     frame.render_widget(header, chunks[0]);
 
-    // Status box
-    let status = {
-        let mut parts: Vec<String> = Vec::new();
-
-        // cursor mode
-        if app.follow_playback {
-            parts.push(" CURSOR: Follow".to_string());
-        } else {
-            parts.push(" CURSOR: Free-roam".to_string());
-        }
-
-        // loop mode
-        let loop_text = match app.loop_mode {
-            crate::audio::LoopMode::NoLoop => "PLAYBACK: No-loop",
-            crate::audio::LoopMode::LoopAll => "PLAYBACK: Loop-around",
-            crate::audio::LoopMode::LoopOne => "PLAYBACK: Repeat-one",
-        };
-        parts.push(loop_text.to_string());
-
-        // filter
-        let q = app.filter_query.trim();
-        if app.filter_mode || !q.is_empty() {
-            let mut filter_part = String::from("FILTER:");
-            if !q.is_empty() {
-                filter_part.push_str(" ");
-                filter_part.push_str(q);
-            }
-            parts.push(filter_part);
-        }
-
-        // playback info
-        if let Some(ref h) = app.playback_handle {
-            if let Ok(info) = h.lock() {
-                let state = if info.playing { "Playing" } else { "Paused" };
-                if let Some(idx) = info.index {
-                    let track = &app.tracks[idx];
-                    let song = now_playing_track_text(app, idx, ui_settings);
-                    let time = now_playing_time_text(info.elapsed, track.duration, ui_settings);
-                    if let Some(time) = time {
-                        parts.push(format!("Song: {} [{}]", song, time));
-                    } else {
-                        parts.push(format!("Song: {}", song));
-                    }
-                    parts.push(state.to_string());
-                } else {
-                    parts.push("Stopped".to_string());
-                }
-            }
-        }
-
-        // shuffle
-        if app.shuffle {
-            parts.push("Shuffle: ON".to_string());
-        } else {
-            parts.push("Shuffle: OFF".to_string());
-        }
-
-        // current dir
-        if let Some(dir) = &app.current_dir {
-            parts.push(format!("Dir: {}", dir));
-        }
-
-        parts.join(" • ")
-    };
-
-    let status_par = Paragraph::new(status)
+    // Status box (wrap-aware)
+    let status_par = Paragraph::new(status_text_val)
         .slow_blink()
         .block(
             Block::bordered()
@@ -396,7 +447,6 @@ pub fn draw(
         frame.render_widget(meta_paragraph, popup_area);
     }
 
-    let footer_text = controls_text(controls_settings.scrub_seconds);
     let footer = Paragraph::new(footer_text)
         .block(
             Block::default()

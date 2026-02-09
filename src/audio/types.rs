@@ -6,7 +6,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum LoopMode {
     /// Do not wrap at the end of the current queue.
     NoLoop,
@@ -30,6 +30,8 @@ pub enum AudioCmd {
     Stop,
     /// Toggle pause/resume.
     TogglePause,
+    /// Set absolute volume (0.0 - 1.0).
+    SetVolume(f32),
     /// Toggle shuffle mode in the audio thread.
     ToggleShuffle,
     /// Set the current queue/order to the provided indices.

@@ -26,6 +26,8 @@ pub struct App {
     pub selected: usize,
     pub playback: PlaybackState,
     pub playback_handle: Option<PlaybackHandle>,
+    pub volume: f32,
+    pub initial_volume: f32,
 
     lower_titles: Option<Vec<String>>,
 
@@ -41,6 +43,7 @@ pub struct App {
     pub order_handle: Option<crate::audio::OrderHandle>,
     pub current_dir: Option<String>,
     pub metadata_window: bool,
+    pub notice: Option<String>,
 }
 
 impl App {
@@ -67,6 +70,8 @@ impl App {
             selected: 0,
             playback: PlaybackState::Stopped,
             playback_handle: None,
+            volume: 1.0,
+            initial_volume: 1.0,
 
             lower_titles,
 
@@ -81,7 +86,13 @@ impl App {
             order_handle: None,
             current_dir: None,
             metadata_window: false,
+            notice: None,
         }
+    }
+
+    /// Set a user-facing notice message.
+    pub fn set_notice(&mut self, message: String) {
+        self.notice = Some(message);
     }
 
     /// Mark the queue as needing regeneration (flags that the order changed).
@@ -108,6 +119,38 @@ impl App {
     pub fn follow_playback_off(&mut self) {
         self.follow_playback = false;
         self.pending_follow_index = None;
+    }
+    /// Return current volume as 0.0-1.0 scalar.
+    pub fn volume(&self) -> f32 {
+        self.volume
+    }
+
+    /// Return current volume rounded to a whole percent.
+    pub fn volume_percent(&self) -> u8 {
+        (self.volume * 100.0).round().clamp(0.0, 100.0) as u8
+    }
+
+    /// Set the current volume using a scalar (0.0-1.0), clamping out-of-range values.
+    pub fn set_volume(&mut self, v: f32) -> f32 {
+        let clamped = v.clamp(0.0, 1.0);
+        self.volume = clamped;
+        clamped
+    }
+
+    /// Set the initial volume (and current volume) using a percentage (0-100).
+    pub fn set_initial_volume_percent(&mut self, pct: u8) -> f32 {
+        let v = (pct as f32) / 100.0;
+        let clamped = v.clamp(0.0, 1.0);
+        self.initial_volume = clamped;
+        self.volume = clamped;
+        clamped
+    }
+
+    /// Reset current volume back to the stored initial volume.
+    pub fn reset_volume_to_initial(&mut self) -> f32 {
+        let v = self.initial_volume;
+        self.volume = v;
+        v
     }
     /// Set an index to follow once playback information becomes available.
     pub fn set_pending_follow_index(&mut self, idx: usize) {

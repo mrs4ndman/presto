@@ -3,7 +3,7 @@
 //! This module exposes the configuration schema used to drive runtime
 //! behavior and helpers to load configuration from disk.
 
-mod load;
+pub mod load;
 mod schema;
 
 pub use schema::*;

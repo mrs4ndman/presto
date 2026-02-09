@@ -3,11 +3,13 @@ use std::path::Path;
 use std::sync::mpsc;
 
 use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::app::App;
-use crate::audio::AudioPlayer;
+use crate::audio::{AudioCmd, AudioPlayer};
 use crate::library::scan;
 use crate::mpris::ControlCmd;
 
@@ -15,6 +17,7 @@ mod event_loop;
 mod mpris_sync;
 mod settings;
 mod startup;
+mod state;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let settings = settings::load_settings();
@@ -34,14 +37,53 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     app.set_current_dir(dir.clone());
     app.set_playback_handle(audio_player.playback_handle());
     app.set_order_handle(audio_player.order_handle());
+    app.set_initial_volume_percent(settings.audio.initial_volume_percent);
+
+    let store = state::StateStore::new_default();
+    let persisted_state = match store.load_directory_state(&dir) {
+        Ok(state) => state,
+        Err(err) => {
+            app.set_notice(format!("State load failed: {}", err));
+            eprintln!(
+                "presto: state_load_failed path=\"{}\" error=\"{}\"",
+                err.path().display(),
+                err
+            );
+            None
+        }
+    };
+    state::apply_filter_and_selection(&mut app, persisted_state.as_ref());
+
+    app.shuffle = persisted_state
+        .as_ref()
+        .and_then(|s| s.shuffle)
+        .unwrap_or(settings.playback.shuffle);
+
+    app.loop_mode = persisted_state
+        .as_ref()
+        .and_then(|s| s.loop_mode)
+        .unwrap_or(match settings.playback.loop_mode {
+            crate::config::LoopModeSetting::NoLoop => crate::audio::LoopMode::NoLoop,
+            crate::config::LoopModeSetting::LoopAll => crate::audio::LoopMode::LoopAll,
+            crate::config::LoopModeSetting::LoopOne => crate::audio::LoopMode::LoopOne,
+        });
+
+    if let Some(fp) = persisted_state.as_ref().and_then(|s| s.follow_playback) {
+        if fp {
+            app.follow_playback_on();
+        } else {
+            app.follow_playback_off();
+        }
+    }
+
+    let _ = audio_player.send(AudioCmd::SetVolume(app.volume()));
 
     let (control_tx, control_rx) = mpsc::channel::<ControlCmd>();
     let mpris = crate::mpris::spawn_mpris(control_tx.clone());
 
     mpris_sync::update_mpris(&mpris, &app);
 
-    let pending_shuffle_reselect_from =
-        startup::apply_playback_defaults(&mut app, &audio_player, &settings);
+    let pending_shuffle_reselect_from = startup::apply_playback_defaults(&mut app, &audio_player);
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -68,6 +110,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
+
+    if let Err(e) = store.persist_directory_state(&dir, &app) {
+        eprintln!(
+            "presto: state_persist_failed path=\"{}\" error=\"{}\"",
+            e.path().display(),
+            e
+        );
+    }
 
     run_result
 }

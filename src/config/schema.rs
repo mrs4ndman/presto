@@ -42,6 +42,8 @@ pub struct AudioSettings {
     /// Fade-out duration when quitting (milliseconds).
     /// Set to 0 to stop immediately.
     pub quit_fade_out_ms: u64,
+    /// Initial playback volume as a percentage (0-100).
+    pub initial_volume_percent: u8,
 }
 
 impl Default for AudioSettings {
@@ -50,6 +52,7 @@ impl Default for AudioSettings {
             crossfade_ms: 250,
             crossfade_steps: 10,
             quit_fade_out_ms: 500,
+            initial_volume_percent: 50,
         }
     }
 }
@@ -87,7 +90,11 @@ impl Default for UiSettings {
             header_text: " ~ And presto! It's music ~ ".to_string(),
             now_playing_track_fields: vec![TrackDisplayField::Display],
             now_playing_track_separator: " - ".to_string(),
-            now_playing_time_fields: vec![TimeField::Elapsed, TimeField::Total, TimeField::Remaining],
+            now_playing_time_fields: vec![
+                TimeField::Elapsed,
+                TimeField::Total,
+                TimeField::Remaining,
+            ],
             now_playing_time_separator: " / ".to_string(),
         }
     }
@@ -98,11 +105,16 @@ impl Default for UiSettings {
 pub struct ControlsSettings {
     /// Number of seconds to scrub when pressing `H` / `L`.
     pub scrub_seconds: u64,
+    /// Percentage step to change volume when pressing `-` / `=`.
+    pub volume_step_percent: u8,
 }
 
 impl Default for ControlsSettings {
     fn default() -> Self {
-        Self { scrub_seconds: 5 }
+        Self {
+            scrub_seconds: 5,
+            volume_step_percent: 5,
+        }
     }
 }
 
