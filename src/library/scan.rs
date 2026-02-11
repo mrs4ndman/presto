@@ -1,7 +1,8 @@
 use std::path::Path;
 use std::time::Duration;
 
-use lofty::{AudioFile, ItemKey, TaggedFileExt};
+// use lofty::{AudioFile, ItemKey, TaggedFileExt};
+use lofty::prelude::*;
 use walkdir::WalkDir;
 
 use crate::config::LibrarySettings;
@@ -77,18 +78,18 @@ pub fn scan(dir: &Path, settings: &LibrarySettings) -> Vec<Track> {
                 duration = Some(tagged.properties().duration());
 
                 if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
-                    if let Some(v) = tag.get_string(&ItemKey::TrackTitle) {
+                    if let Some(v) = tag.get_string(ItemKey::TrackTitle) {
                         if !v.trim().is_empty() {
                             title = v.to_string();
                         }
                     }
-                    if let Some(v) = tag.get_string(&ItemKey::TrackArtist) {
+                    if let Some(v) = tag.get_string(ItemKey::TrackArtist) {
                         let v = v.trim();
                         if !v.is_empty() {
                             artist = Some(v.to_string());
                         }
                     }
-                    if let Some(v) = tag.get_string(&ItemKey::AlbumTitle) {
+                    if let Some(v) = tag.get_string(ItemKey::AlbumTitle) {
                         let v = v.trim();
                         if !v.is_empty() {
                             album = Some(v.to_string());

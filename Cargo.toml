@@ -9,13 +9,13 @@ ratatui = "0.30.0"
 rodio = "0.21.1"
 walkdir = "2.5.0"
 async-io = "2.6.0"
-zbus = { version = "4.4.0", default-features = true }
-zvariant = "4.2.0"
-rand = "0.8"
-lofty = "0.18"
+zbus = { version = "5.13.2", default-features = true }
+zvariant = "5.9.2"
+rand = "0.10"
+lofty = "0.23"
 config = { version = "0.15.19", features = ["toml"] }
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "0.9.12"
 
 [dev-dependencies]
 tempfile = "3"

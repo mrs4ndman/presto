@@ -26,17 +26,22 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- (none for now)
+- [ ] Stopping fadeout?
+- [ ] Settings for disabling count-display on the bottom
+- [ ] Enabling re-ordering / disabling some status sections
+- [ ] Tweak fuzzy finding to be word-by-word and not match on spare letters (or
+  rather, make it the default and offer mega-fuzzy-finding as a toggle)
 
 </details>
 
 ### Long-term
 <details>
-<summary>List of items to tackle</summary>
+<summary>List of items to tackle / consider</summary>
 
 - [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Theming
 - [ ] Cross-platform compatibility
+- [ ] Server-client restructuring
 
 </details>
 

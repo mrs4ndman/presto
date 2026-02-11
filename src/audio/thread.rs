@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::prelude::ThreadRng;
 use rodio::{OutputStreamBuilder, Sink};
 
 use crate::config::AudioSettings;
@@ -308,7 +308,7 @@ pub(super) fn spawn_audio_thread(
                     AudioCmd::ToggleShuffle => {
                         shuffle = !shuffle;
                         if shuffle {
-                            order.shuffle(&mut thread_rng());
+                            order.shuffle(&mut ThreadRng::default());
                         } else {
                             order = (0..tracks.len()).collect();
                         }
