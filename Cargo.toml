@@ -1,7 +1,15 @@
 [package]
 name = "presto"
+description = "A simple TUI music player with Vim bindings"
 version = "0.1.0"
 edition = "2024"
+authors = ["Juan Mañanes"]
+repository = "https://github.com/mrs4ndman/presto"
+license = "MIT"
+readme = "README.md"
+homepage = "https://presto.mrs4ndman.dev"
+keywords = ["music", "terminal", "vi-like", "player", "utility"]
+categories = ["command-line-utilities", "multimedia::audio"]
 
 [dependencies]
 crossterm = "0.29.0"
