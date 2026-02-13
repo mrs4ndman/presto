@@ -6,6 +6,20 @@ Presto is a terminal music player (Rust + ratatui) with keyboard-first navigatio
 This page is the entry point for the web documentation (GitHub Pages). Use it as an index into the rest of the docs.
 
 ## Quick start
+### From `crates.io`
+
+- You can now download and compile `presto` from the `crates.io` repository:
+
+```bash
+cargo install presto
+```
+
+- This command will place the `presto` executable in the `~/.cargo/bin`
+  directory.
+
+--- 
+
+### From source
 
 Build:
 

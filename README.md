@@ -9,8 +9,21 @@ A simple music player TUI written in Rust, with Vim-like controls.
 - `Ctrl+e` exits filter input without starting playback
 - MPRIS integration for `playerctl` / media keys
 - Per-directory state persistence (selection, filter, shuffle, loop, volume, last track)
+- Number-driven movement for `hjkl` skipping / navigation
 
 ## Getting started
+
+- Dependencies:
+  - [`rodio` requirements](https://github.com/RustAudio/rodio#requirements)
+  - `libasound2-dev` (on Ubuntu-based at least)
+
+### `crates.io`
+- The version uploaded to `crates.io` is the one on the develop branch:
+```bash
+cargo install presto
+```
+
+### From source
 - Build: `cargo build`
 - Run: `cargo run -- [music_dir]`
 	- If `music_dir` is omitted, it defaults to the current directory
