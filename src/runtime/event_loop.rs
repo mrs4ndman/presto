@@ -526,8 +526,16 @@ fn handle_normal_key_event(
         KeyCode::Char('q') => {
             state.pending_key.clear();
             clear_pending_count(state, app);
-            audio_player.quit_softly(Duration::from_millis(settings.audio.quit_fade_out_ms));
-            return Ok(true);
+            match state.last_mpris_playback {
+                PlaybackState::Stopped | PlaybackState::Paused => {
+                    return Ok(true);
+                }
+                PlaybackState::Playing => {
+                    audio_player
+                        .quit_softly(Duration::from_millis(settings.audio.quit_fade_out_ms));
+                    return Ok(true);
+                }
+            }
         }
         KeyCode::Char(c)
             if c.is_ascii_digit() && !key.modifiers.contains(KeyModifiers::CONTROL) =>

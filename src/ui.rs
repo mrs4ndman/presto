@@ -266,9 +266,9 @@ fn status_text(app: &App, ui_settings: &UiSettings) -> String {
     parts.push(format!("STATE: {}", state));
 
     if app.follow_playback {
-        parts.push(" CURSOR: Follow".to_string());
+        parts.push("CURSOR: Follow".to_string());
     } else {
-        parts.push(" CURSOR: Free-roam".to_string());
+        parts.push("CURSOR: Free-roam".to_string());
     }
 
     let loop_text = match app.loop_mode {
