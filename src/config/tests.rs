@@ -110,6 +110,8 @@ volume_step_percent = 7
 
 [ui]
 follow_playback = false
+lyrics_enabled = true
+show_pending_count = false
 header_text = "hello"
 now_playing_track_fields = ["artist", "title"]
 now_playing_track_separator = " • "
@@ -140,6 +142,8 @@ display_separator = "::"
     assert_eq!(s.controls.scrub_seconds, 9);
     assert_eq!(s.controls.volume_step_percent, 7);
     assert!(!s.ui.follow_playback);
+    assert!(s.ui.lyrics_enabled);
+    assert!(!s.ui.show_pending_count);
     assert_eq!(s.ui.header_text, "hello");
     assert_eq!(s.ui.now_playing_track_fields.len(), 2);
     assert!(matches!(

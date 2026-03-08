@@ -5,8 +5,10 @@ A simple music player TUI written in Rust, with Vim-like controls.
 ## Features
 - Directory scan of common audio files (`mp3`, `flac`, `wav`, `ogg`)
 - Keyboard-driven TUI with Vim-like controls
-- `/` filter (type-to-filter track titles)
+- `/` filter with word-by-word fuzzy matching
 - `Ctrl+e` exits filter input without starting playback
+- Right-sid panes for metadata and embedded lyrics (opened up with `K` / `gl`)
+- Opt-in lyrics loading via config, with timed-line emphasis for synced lyrics
 - MPRIS integration for `playerctl` / media keys
 - Per-directory state persistence (selection, filter, shuffle, loop, volume, last track)
 - Number-driven movement for `hjkl` skipping / navigation
@@ -39,11 +41,7 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- [ ] Stopping fadeout?
-- [ ] Settings for disabling count-display on the bottom
 - [ ] Enabling re-ordering / disabling some status sections
-- [ ] Tweak fuzzy finding to be word-by-word and not match on spare letters (or
-  rather, make it the default and offer mega-fuzzy-finding as a toggle)
 
 </details>
 
@@ -53,7 +51,7 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 
 - [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Theming
-- [ ] Cross-platform compatibility
+- [ ] Cross-platform compatibility (config/state paths, media controls, audio backend support)
 - [ ] Server-client restructuring
 
 </details>

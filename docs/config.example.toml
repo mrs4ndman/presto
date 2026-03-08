@@ -28,6 +28,14 @@ volume_step_percent = 5
 # Start with selection following the currently playing track
 follow_playback = true
 
+# Enable embedded lyrics loading and the `gl` lyrics popup.
+# Disabled by default so Presto does not read lyrics data unless you opt in.
+lyrics_enabled = false
+
+# Show typed count prefixes in the bottom input panel.
+# Set to false if you only want filter input shown there.
+show_pending_count = true
+
 # Line numbers in the track list
 # show_relative_numbers: show distance from the selected row
 # show_current_line_number: show absolute number for the selected row

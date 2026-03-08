@@ -3,8 +3,11 @@
 //! The `App` struct holds the current library, selected track and playback
 //! related flags used by the UI and runtime.
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use crate::audio::{LoopMode, PlaybackHandle};
-use crate::library::Track;
+use crate::library::{Lyrics, Track};
 
 /// The playback state of the application.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -46,6 +49,11 @@ pub struct App {
     pub notice: Option<String>,
     pub pending_count: Option<u32>,
     pub controls_popup: bool,
+    pub lyrics_popup: bool,
+
+    current_track_lyrics_index: Option<usize>,
+    current_track_lyrics: Option<Lyrics>,
+    lyrics_cache: HashMap<PathBuf, Option<Lyrics>>,
 }
 
 impl App {
@@ -56,6 +64,10 @@ impl App {
     /// Toggle the controls popup visibility.
     pub fn toggle_controls_popup(&mut self) {
         self.controls_popup = !self.controls_popup;
+    }
+    /// Toggle the lyrics popup visibility.
+    pub fn toggle_lyrics_popup(&mut self) {
+        self.lyrics_popup = !self.lyrics_popup;
     }
     /// Create a new `App` with the provided list of `tracks`.
     pub fn new(tracks: Vec<Track>) -> Self {
@@ -96,12 +108,21 @@ impl App {
             notice: None,
             pending_count: None,
             controls_popup: false,
+            lyrics_popup: false,
+            current_track_lyrics_index: None,
+            current_track_lyrics: None,
+            lyrics_cache: HashMap::new(),
         }
     }
 
     /// Set a user-facing notice message.
     pub fn set_notice(&mut self, message: String) {
         self.notice = Some(message);
+    }
+
+    /// Clear any user-facing notice.
+    pub fn clear_notice(&mut self) {
+        self.notice = None;
     }
 
     /// Mark the queue as needing regeneration (flags that the order changed).
@@ -180,6 +201,43 @@ impl App {
     /// Record the current directory in the app state.
     pub fn set_current_dir(&mut self, dir: String) {
         self.current_dir = Some(dir);
+    }
+
+    /// Update the cached lyrics for the currently playing track.
+    pub fn sync_current_track_lyrics(&mut self, track_index: Option<usize>) {
+        if self.current_track_lyrics_index == track_index {
+            return;
+        }
+
+        self.current_track_lyrics_index = track_index;
+        self.current_track_lyrics = track_index.and_then(|idx| {
+            let path = self.tracks.get(idx)?.path.clone();
+
+            if let Some(cached) = self.lyrics_cache.get(&path) {
+                return cached.clone();
+            }
+
+            let lyrics = crate::library::load_lyrics_from_path(&path);
+            self.lyrics_cache.insert(path, lyrics.clone());
+            lyrics
+        });
+    }
+
+    /// Clear any cached current-track lyrics view state.
+    pub fn clear_current_track_lyrics(&mut self) {
+        self.current_track_lyrics_index = None;
+        self.current_track_lyrics = None;
+        self.lyrics_popup = false;
+    }
+
+    /// Return the current playing index for which lyrics are stored.
+    pub fn current_track_lyrics_index(&self) -> Option<usize> {
+        self.current_track_lyrics_index
+    }
+
+    /// Return the currently cached lyrics for the playing track.
+    pub fn current_track_lyrics(&self) -> Option<&Lyrics> {
+        self.current_track_lyrics.as_ref()
     }
 
     /// Return the display order of track indices, taking into account shuffle
@@ -300,18 +358,63 @@ impl App {
     /// Fuzzy/subsequence match: return the character positions in `title`
     /// that match `query`, or `None` if not matched.
     pub fn fuzzy_match_positions(title: &str, query: &str) -> Option<Vec<usize>> {
-        if query.is_empty() {
+        if query.trim().is_empty() {
+            return Some(Vec::new());
+        }
+
+        let query_terms = Self::query_terms(query);
+        if query_terms.is_empty() {
+            return None;
+        }
+
+        let title_lower = title.to_ascii_lowercase();
+        Self::fuzzy_match_positions_wordwise(&title_lower, &query_terms)
+    }
+
+    fn query_terms(query: &str) -> Vec<String> {
+        query
+            .split_whitespace()
+            .map(|term| term.to_ascii_lowercase())
+            .filter(|term| !term.is_empty())
+            .collect()
+    }
+
+    fn title_words_with_positions(text: &str) -> Vec<(String, Vec<usize>)> {
+        let mut words: Vec<(String, Vec<usize>)> = Vec::new();
+        let mut current = String::new();
+        let mut positions: Vec<usize> = Vec::new();
+
+        for (idx, ch) in text.chars().enumerate() {
+            if ch.is_whitespace() {
+                if !current.is_empty() {
+                    words.push((std::mem::take(&mut current), std::mem::take(&mut positions)));
+                }
+                continue;
+            }
+
+            current.push(ch);
+            positions.push(idx);
+        }
+
+        if !current.is_empty() {
+            words.push((current, positions));
+        }
+
+        words
+    }
+
+    fn subsequence_positions(haystack: &str, needle: &str) -> Option<Vec<usize>> {
+        if needle.is_empty() {
             return Some(Vec::new());
         }
 
         let mut positions: Vec<usize> = Vec::new();
-        let mut title_iter = title.chars().enumerate();
+        let mut haystack_iter = haystack.chars().enumerate();
 
-        for qc in query.chars() {
-            let qc_low = qc.to_ascii_lowercase();
+        for qc in needle.chars() {
             loop {
-                match title_iter.next() {
-                    Some((ti, tc)) if tc.to_ascii_lowercase() == qc_low => {
+                match haystack_iter.next() {
+                    Some((ti, tc)) if tc == qc => {
                         positions.push(ti);
                         break;
                     }
@@ -324,29 +427,48 @@ impl App {
         Some(positions)
     }
 
-    /// Lowercase-only fuzzy match optimized for pre-lowered strings.
-    fn fuzzy_match_positions_lower(title_lower: &str, query_lower: &str) -> Option<Vec<usize>> {
-        if query_lower.is_empty() {
-            return Some(Vec::new());
-        }
+    fn fuzzy_match_positions_wordwise(
+        title_lower: &str,
+        query_terms: &[String],
+    ) -> Option<Vec<usize>> {
+        let title_words = Self::title_words_with_positions(title_lower);
+        let mut title_word_index = 0usize;
+        let mut matches: Vec<usize> = Vec::new();
 
-        let mut positions: Vec<usize> = Vec::new();
-        let mut title_iter = title_lower.chars().enumerate();
+        for term in query_terms {
+            let mut matched = false;
 
-        for qc in query_lower.chars() {
-            loop {
-                match title_iter.next() {
-                    Some((ti, tc)) if tc == qc => {
-                        positions.push(ti);
-                        break;
-                    }
-                    Some(_) => continue,
-                    None => return None,
+            while title_word_index < title_words.len() {
+                let (word, positions) = &title_words[title_word_index];
+                title_word_index += 1;
+
+                if let Some(word_matches) = Self::subsequence_positions(word, term) {
+                    matches.extend(word_matches.into_iter().map(|idx| positions[idx]));
+                    matched = true;
+                    break;
                 }
+            }
+
+            if !matched {
+                return None;
             }
         }
 
-        Some(positions)
+        Some(matches)
+    }
+
+    /// Lowercase-only fuzzy match optimized for pre-lowered strings.
+    fn fuzzy_match_positions_lower(title_lower: &str, query_lower: &str) -> Option<Vec<usize>> {
+        if query_lower.trim().is_empty() {
+            return Some(Vec::new());
+        }
+
+        let query_terms = Self::query_terms(query_lower);
+        if query_terms.is_empty() {
+            return None;
+        }
+
+        Self::fuzzy_match_positions_wordwise(title_lower, &query_terms)
     }
 
     /// Enter filter mode: enable filtering and adjust cursor behavior.

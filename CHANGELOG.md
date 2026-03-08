@@ -38,3 +38,11 @@
 | 09-02-2026        | Fix: Preserve multi-space display separators in the track list                          | Whitespace is no longer collapsed in wrapped list items      |
 | 09-02-2026        | Tweak: Expand config validation and reporting                                           | Flags invalid ranges and empty extension lists              |
 | 09-02-2026        | Tweak: Add UI app-state indicator in the status line                                    | Shows FILTER / NAVIGATION / FOLLOWING_PLAYING               |
+| 05-03-2026        | Tweak: Quit immediately when playback is stopped or paused                              | Keeps soft fade-out only for actively playing audio         |
+| 05-03-2026        | Tweak: Clean status-line cursor spacing and refresh dependency lockfile                 | Removes extra cursor padding; bumps locked `toml_parser`    |
+| 09-03-2026        | Feature: Add opt-in embedded lyrics pane with `gl` and per-track caching                | Reads embedded lyrics only when enabled in config           |
+| 09-03-2026        | Tweak: Stack metadata and lyrics in the right rail and bold the active timed lyric line | Keeps both panes visible without side-by-side compression   |
+| 09-03-2026        | Feature: Add config toggle for pending count display in the bottom panel                | Lets count prefixes be hidden while keeping filter input    |
+| 09-03-2026        | Tweak: Make filtering word-by-word instead of cross-title spare-letter matching         | Query terms now match title words in order                  |
+| 09-03-2026        | Testing: Add focused coverage for lyrics cache state, count-display config, and filter matching | Locks down the new UI/config behavior                        |
+| 09-03-2026        | Docs: Update controls, config, README, and backlog for lyrics and filter changes        | Reflects the new `gl` pane, config toggles, and completed short-term items |

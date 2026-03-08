@@ -2,7 +2,7 @@
 //!
 //! This module contains functions to render the TUI using `ratatui`.
 
-use ratatui::text::Line;
+use ratatui::text::{Line, Span, Text};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -12,6 +12,7 @@ use ratatui::{
 use std::{collections::BTreeMap, sync::LazyLock, time::Duration};
 
 use crate::app::App;
+use crate::library::{Lyrics, TimedLyricLine};
 use crate::config::{ControlsSettings, TimeField, TrackDisplayField, UiSettings};
 
 static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
@@ -22,6 +23,7 @@ static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     map.insert("space/p".to_string(), "play/pause".to_string());
     map.insert("h/l".to_string(), "prev/next song".to_string());
     map.insert("g?".to_string(), "controls".to_string());
+    map.insert("gl".to_string(), "lyrics".to_string());
     // H/L is filled dynamically from config.
     map.insert("-".to_string(), "volume down".to_string());
     map.insert("+".to_string(), "volume up".to_string());
@@ -42,7 +44,7 @@ fn controls_text(scrub_seconds: u64) -> String {
     // Keep the rendered order stable and human-friendly.
     let order = [
         "j/k", "h/l", "H/L", "-", "+", "=", "enter", "ctrl+e", "space/p", "gg/G", "K", "/", "s",
-        "r", "g?", "q",
+        "r", "gl", "g?", "q",
     ];
     order
         .iter()
@@ -320,17 +322,40 @@ fn status_text(app: &App, ui_settings: &UiSettings) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::wrap_text_lines;
+    use super::{bottom_info_text, wrap_text_lines};
+    use crate::{app::App, config::UiSettings};
 
     #[test]
     fn wrap_text_preserves_multiple_spaces() {
         let lines = wrap_text_lines("Artist  Title", 50);
         assert_eq!(lines, vec!["Artist  Title".to_string()]);
     }
+
+    #[test]
+    fn bottom_info_hides_count_when_disabled() {
+        let mut app = App::new(Vec::new());
+        let mut ui = UiSettings::default();
+        app.pending_count = Some(12);
+        ui.show_pending_count = false;
+
+        assert_eq!(bottom_info_text(&app, &ui), None);
+    }
+
+    #[test]
+    fn bottom_info_keeps_filter_when_count_is_disabled() {
+        let mut app = App::new(Vec::new());
+        let mut ui = UiSettings::default();
+        app.filter_mode = true;
+        app.filter_query = "black sabbath".to_string();
+        app.pending_count = Some(12);
+        ui.show_pending_count = false;
+
+        assert_eq!(bottom_info_text(&app, &ui), Some("Filter: black sabbath".to_string()));
+    }
 }
 
 /// Build the input panel content (filter + count), or none when empty.
-fn bottom_info_text(app: &App) -> Option<String> {
+fn bottom_info_text(app: &App, ui_settings: &UiSettings) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
 
     let q = app.filter_query.trim();
@@ -342,8 +367,10 @@ fn bottom_info_text(app: &App) -> Option<String> {
         }
     }
 
-    if let Some(count) = app.pending_count {
-        lines.push(format!("Count: {}", count));
+    if ui_settings.show_pending_count {
+        if let Some(count) = app.pending_count {
+            lines.push(format!("Count: {}", count));
+        }
     }
 
     if lines.is_empty() {
@@ -477,6 +504,114 @@ fn format_duration_mmss_ceil(d: Option<Duration>) -> String {
     format!("{}:{:02} ({}s)", minutes, seconds, total_secs)
 }
 
+fn metadata_text(app: &App) -> String {
+    let selected = app.tracks.get(app.selected);
+    if let Some(track) = selected {
+        let dur = format_duration_mmss_ceil(track.duration);
+        format!(
+            "Selected Track\n\nTitle: {}\nArtist: {}\nAlbum: {}\nDuration: {}\nPath: {}",
+            track.title,
+            track.artist.as_deref().unwrap_or("-"),
+            track.album.as_deref().unwrap_or("-"),
+            dur,
+            track.path.display()
+        )
+    } else {
+        "Selected Track\n\nNo track selected".to_string()
+    }
+}
+
+fn current_playback_elapsed(app: &App) -> Option<Duration> {
+    app.playback_handle
+        .as_ref()
+        .and_then(|handle| handle.lock().ok().map(|info| info.elapsed))
+}
+
+fn active_timed_lyric_index(lines: &[TimedLyricLine], elapsed: Duration) -> Option<usize> {
+    lines.iter().rposition(|line| line.timestamp <= elapsed)
+}
+
+fn timed_lyrics_lines(
+    lines: &[TimedLyricLine],
+    elapsed: Duration,
+    max_visible: usize,
+) -> Vec<Line<'static>> {
+    if lines.is_empty() {
+        return vec![Line::from("No timed lyrics found.")];
+    }
+
+    let active = active_timed_lyric_index(lines, elapsed);
+    let focus = active.unwrap_or(0);
+    let window = max_visible.max(5);
+    let before = window / 3;
+    let after = window.saturating_sub(before + 1);
+
+    let mut start = focus.saturating_sub(before);
+    let mut end = (focus + after + 1).min(lines.len());
+    if end - start < window {
+        start = end.saturating_sub(window);
+        end = (start + window).min(lines.len());
+    }
+
+    let mut rendered: Vec<Line<'static>> = Vec::new();
+    if start > 0 {
+        rendered.push(Line::from("..."));
+    }
+
+    for (idx, line) in lines[start..end].iter().enumerate() {
+        let absolute_idx = start + idx;
+        let style = match active {
+            Some(active_idx) if absolute_idx == active_idx => {
+                Style::default().add_modifier(Modifier::BOLD)
+            }
+            _ => Style::default(),
+        };
+        rendered.push(Line::from(Span::styled(line.text.clone(), style)));
+    }
+
+    if end < lines.len() {
+        rendered.push(Line::from("..."));
+    }
+
+    rendered
+}
+
+fn lyrics_text(app: &App, ui_settings: &UiSettings, max_visible_lines: usize) -> Text<'static> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    match app.current_track_lyrics_index() {
+        Some(idx) => {
+            lines.push(Line::from(Span::styled(
+                now_playing_track_text(app, idx, ui_settings),
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(String::new()));
+
+            match app.current_track_lyrics() {
+                Some(Lyrics::Plain(lyrics)) => {
+                    lines.extend(lyrics.lines().map(|line| Line::from(line.to_string())));
+                }
+                Some(Lyrics::Timed(timed)) => {
+                    let elapsed = current_playback_elapsed(app).unwrap_or(Duration::ZERO);
+                    lines.extend(timed_lyrics_lines(
+                        timed,
+                        elapsed,
+                        max_visible_lines.saturating_sub(2),
+                    ));
+                }
+                None => {
+                    lines.push(Line::from("No embedded lyrics found."));
+                }
+            }
+        }
+        None => {
+            lines.push(Line::from("No track playing."));
+        }
+    }
+
+    Text::from(lines)
+}
+
 /// Render the entire UI into the provided `frame` using `app` state and settings.
 pub fn draw(
     frame: &mut Frame,
@@ -485,7 +620,7 @@ pub fn draw(
     ui_settings: &UiSettings,
     controls_settings: &ControlsSettings,
 ) {
-    let bottom_text = bottom_info_text(app);
+    let bottom_text = bottom_info_text(app, ui_settings);
     let bottom_height = if let Some(ref text) = bottom_text {
         let bottom_content_width = frame.area().width.saturating_sub(3).max(1);
         wrapped_line_count(text, bottom_content_width)
@@ -549,21 +684,52 @@ pub fn draw(
         .wrap(Wrap { trim: true });
     frame.render_widget(status_par, chunks[1]);
 
-    // Main list (and optional metadata pane)
+    // Main list (and optional right-side panes)
     let mut list_area = chunks[2];
     let mut meta_area: Option<Rect> = None;
-    if app.metadata_window {
-        let meta_width = (list_area.width * 2 / 5).clamp(32, 60);
+    let mut lyrics_area: Option<Rect> = None;
+    let show_lyrics_pane = app.lyrics_popup && ui_settings.lyrics_enabled;
+    if app.metadata_window || show_lyrics_pane {
+        let side_width = (list_area.width * 2 / 5).clamp(32, 60);
         let panes = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Min(20),
                 Constraint::Length(1),
-                Constraint::Length(meta_width),
+                Constraint::Length(side_width),
             ])
             .split(list_area);
         list_area = panes[0];
-        meta_area = Some(panes[2]);
+
+        match (app.metadata_window, show_lyrics_pane) {
+            (true, true) => {
+                let sidebar = panes[2];
+                let meta = metadata_text(app);
+                let meta_content_width = sidebar.width.saturating_sub(3).max(1);
+                let ideal_meta_height = wrapped_line_count(&meta, meta_content_width)
+                    .saturating_add(2)
+                    .max(7);
+                let max_meta_height = sidebar.height.saturating_sub(8).max(7);
+                let meta_height = ideal_meta_height.min(max_meta_height);
+                let stacked = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(meta_height),
+                        Constraint::Length(1),
+                        Constraint::Min(6),
+                    ])
+                    .split(sidebar);
+                meta_area = Some(stacked[0]);
+                lyrics_area = Some(stacked[2]);
+            }
+            (true, false) => {
+                meta_area = Some(panes[2]);
+            }
+            (false, true) => {
+                lyrics_area = Some(panes[2]);
+            }
+            (false, false) => {}
+        }
     }
 
     {
@@ -675,20 +841,7 @@ pub fn draw(
 
     // Metadata side pane
     if let Some(meta_area) = meta_area {
-        let track = app.tracks.get(app.selected);
-        let meta = if let Some(track) = track {
-            let dur = format_duration_mmss_ceil(track.duration);
-            format!(
-                "Title: {}\nArtist: {}\nAlbum: {}\nDuration: {}\nPath: {}",
-                track.title,
-                track.artist.as_deref().unwrap_or("-"),
-                track.album.as_deref().unwrap_or("-"),
-                dur,
-                track.path.display()
-            )
-        } else {
-            "No track selected".to_string()
-        };
+        let meta = metadata_text(app);
         let meta_paragraph = Paragraph::new(meta)
             .block(
                 Block::default()
@@ -703,6 +856,24 @@ pub fn draw(
             )
             .wrap(Wrap { trim: true });
         frame.render_widget(meta_paragraph, meta_area);
+    }
+
+    if let Some(lyrics_area) = lyrics_area {
+        let content_height = lyrics_area.height.saturating_sub(2) as usize;
+        let lyrics_paragraph = Paragraph::new(lyrics_text(app, ui_settings, content_height))
+            .block(
+                Block::default()
+                    .padding(Padding {
+                        left: 1,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                    })
+                    .borders(Borders::ALL)
+                    .title(" lyrics (gl closes) "),
+            )
+            .wrap(Wrap { trim: true });
+        frame.render_widget(lyrics_paragraph, lyrics_area);
     }
 
     // Controls popup (g?)

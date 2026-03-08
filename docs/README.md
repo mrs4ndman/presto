@@ -58,6 +58,8 @@ Implementation and contributor notes:
 
 - Startup directory: if you don’t pass `music_dir`, Presto scans the current working directory.
 - State persistence: per-directory selection/filter/shuffle/loop are saved to `state.toml` next to the config file.
+- Filtering: search now matches query terms word-by-word, in order, instead of letting one term drift across multiple title words.
+- Lyrics: embedded lyrics are opt-in via config and render in a right-side pane with `gl`; timed lyrics emphasize the current line.
 - Seeking/scrubbing: implemented by rebuilding the audio sink and skipping forward in the decoder stream; accuracy varies by codec/container.
 - Quit: uses a short fade-out to avoid an abrupt stop.
 

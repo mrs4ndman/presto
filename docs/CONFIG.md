@@ -53,6 +53,8 @@ Defaults:
 ### `[ui]`
 
 - `follow_playback` (bool): start in follow-playback mode
+- `lyrics_enabled` (bool): enable embedded lyrics loading and the `gl` lyrics popup
+- `show_pending_count` (bool): show typed count prefixes in the bottom input panel
 - `show_relative_numbers` (bool): show relative line numbers in the track list
 - `show_current_line_number` (bool): show the current line number in the track list
 - `header_text` (string): the text rendered in the top "presto" box

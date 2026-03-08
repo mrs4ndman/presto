@@ -65,6 +65,12 @@ pub struct UiSettings {
     /// Whether the cursor starts in "follow playback" mode.
     pub follow_playback: bool,
 
+    /// Enable lyrics loading and lyrics UI surfaces.
+    pub lyrics_enabled: bool,
+
+    /// Show pending count prefixes in the bottom input panel.
+    pub show_pending_count: bool,
+
     /// Show relative line numbers in the track list.
     pub show_relative_numbers: bool,
 
@@ -95,6 +101,8 @@ impl Default for UiSettings {
     fn default() -> Self {
         Self {
             follow_playback: true,
+            lyrics_enabled: false,
+            show_pending_count: true,
             show_relative_numbers: false,
             show_current_line_number: false,
             header_text: " ~ And presto! It's music ~ ".to_string(),

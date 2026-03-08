@@ -219,6 +219,12 @@ pub fn run(
             }
         }
 
+        if settings.ui.lyrics_enabled {
+            app.sync_current_track_lyrics(playback_index_snapshot);
+        } else {
+            app.clear_current_track_lyrics();
+        }
+
         // Keep MPRIS in sync even when playback changes come from XF86/media keys or auto-advance.
         if playback_index_snapshot != state.last_mpris_index
             || app.playback != state.last_mpris_playback
@@ -520,6 +526,9 @@ fn handle_normal_key_event(
             if app.controls_popup {
                 app.toggle_controls_popup();
             }
+            if app.lyrics_popup {
+                app.toggle_lyrics_popup();
+            }
             state.pending_key.clear();
             clear_pending_count(state, app);
         }
@@ -673,11 +682,23 @@ fn handle_normal_key_event(
             let _ = control_tx.send(ControlCmd::PlayPause);
         }
         KeyCode::Char('l') => {
-            state.pending_key.clear();
-            let count = state.take_count_or_default();
-            app.pending_count = None;
-            for _ in 0..count {
-                let _ = control_tx.send(ControlCmd::Next);
+            if state.pending_key.take_if('g') {
+                clear_pending_count(state, app);
+                if settings.ui.lyrics_enabled {
+                    app.toggle_lyrics_popup();
+                    app.clear_notice();
+                } else {
+                    app.set_notice(
+                        "Lyrics are disabled in config ([ui].lyrics_enabled = true)".to_string(),
+                    );
+                }
+            } else {
+                state.pending_key.clear();
+                let count = state.take_count_or_default();
+                app.pending_count = None;
+                for _ in 0..count {
+                    let _ = control_tx.send(ControlCmd::Next);
+                }
             }
         }
         KeyCode::Char('h') => {

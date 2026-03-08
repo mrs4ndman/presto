@@ -13,7 +13,7 @@ This is the complete keyboard reference for Presto.
 Count prefixes:
 
 - Prefix a number to repeat movement: `10j`, `3k`, `2h`, `4l`.
-- The current count shows in the bottom input panel while you type it.
+- The current count shows in the bottom input panel while you type it, unless `ui.show_pending_count = false`.
 
 ## Playback
 
@@ -46,6 +46,16 @@ Notes:
 - The metadata view is a right-side pane; the track list stays visible on the left.
 - Long fields wrap within the pane.
 
+## Lyrics
+
+- `gl`: toggle the lyrics pane for the currently playing track
+
+Notes:
+
+- Lyrics loading is disabled by default; enable it with `ui.lyrics_enabled = true`.
+- When timed lyrics are available, the current line is highlighted in bold.
+- If metadata and lyrics are both open, they stack in the right rail.
+
 ## Controls popup
 
 - `g?`: toggle the controls popup
@@ -55,7 +65,7 @@ Notes:
 
 - `/`: enter filter mode
 - While in filter mode:
-  - type to filter titles (fuzzy/subsequence match)
+  - type to filter titles using word-by-word fuzzy matching
   - `Backspace`: delete
   - `Esc`: clear filter and exit filter mode
   - `Enter`: play the selected match and exit filter mode
@@ -65,6 +75,7 @@ Notes:
 
 Notes:
 
+- Each typed term must match within a title word, in order.
 - If the filter is empty, typing digits starts a count prefix instead of inserting digits.
 
 ## Line numbers
