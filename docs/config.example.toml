@@ -1,5 +1,6 @@
 # Example Presto configuration
 # Location (Linux/XDG): ~/.config/presto/config.toml
+# Environment overrides: PRESTO__SECTION__KEY=VALUE (e.g. PRESTO__AUDIO__INITIAL_VOLUME_PERCENT=65)
 
 [playback]
 # Start with shuffle enabled
@@ -14,19 +15,38 @@ crossfade_ms = 250
 crossfade_steps = 10
 # Quit fade-out duration. Set to 0 to stop immediately.
 quit_fade_out_ms = 500
+# Starting volume (0-100%). This is overridden by last-session volume when state is present.
+initial_volume_percent = 50
 
 [controls]
 # `H` / `L` seek step
 scrub_seconds = 5
+# Volume step per keypress (percentage points)
+volume_step_percent = 5
 
 [ui]
 # Start with selection following the currently playing track
 follow_playback = true
 
+# Enable embedded lyrics loading and the `gl` lyrics popup.
+# Disabled by default so Presto does not read lyrics data unless you opt in.
+lyrics_enabled = false
+
+# Show typed count prefixes in the bottom input panel.
+# Set to false if you only want filter input shown there.
+show_pending_count = true
+
+# Line numbers in the track list
+# show_relative_numbers: show distance from the selected row
+# show_current_line_number: show absolute number for the selected row
+show_relative_numbers = true
+show_current_line_number = true
+
 # Header text (top box)
 header_text = " ~ And presto! It's music ~ "
 
 # Status line "Song:" label fields (order is respected)
+# Options: "display", "title", "artist", "album", "filename", "path"
 now_playing_track_fields = ["display"]
 now_playing_track_separator = " - "
 
@@ -36,6 +56,7 @@ now_playing_track_separator = " - "
 #   ["elapsed", "total"]
 #   ["elapsed", "remaining"]
 #   ["remaining", "elapsed"]
+# Options: "elapsed", "total", "remaining"
 now_playing_time_fields = ["elapsed", "total", "remaining"]
 now_playing_time_separator = " / "
 
@@ -45,8 +66,14 @@ extensions = ["mp3", "flac", "wav", "ogg"]
 follow_links = true
 include_hidden = true
 recursive = true
+# Optional recursion cap (only used when recursive = true)
 # max_depth = 8
 
 # Track list label (this becomes Track.display, used for sorting + filtering + list rendering)
+# Options: "display", "title", "artist", "album", "filename", "path"
 display_fields = ["artist", "title"]
 display_separator = " - "
+
+[state]
+# Enable per-directory state load/persist (defaults to false)
+enabled = false

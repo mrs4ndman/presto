@@ -1,25 +1,17 @@
+//! Startup helpers to apply configuration defaults to the running app.
+//!
+//! Functions here translate `config` values into runtime settings and
+//! initialize audio thread state accordingly.
+
 use crate::app::App;
-use crate::audio::{AudioCmd, AudioPlayer, LoopMode};
-use crate::config;
+use crate::audio::{AudioCmd, AudioPlayer};
 
-pub fn apply_playback_defaults(
-    app: &mut App,
-    audio_player: &AudioPlayer,
-    settings: &config::Settings,
-) -> Option<Vec<usize>> {
-    // Playback defaults
-    app.shuffle = settings.playback.shuffle;
-    app.loop_mode = match settings.playback.loop_mode {
-        config::LoopModeSetting::NoLoop => LoopMode::NoLoop,
-        config::LoopModeSetting::LoopAll => LoopMode::LoopAll,
-        config::LoopModeSetting::LoopOne => LoopMode::LoopOne,
-    };
-
+/// Apply playback-related defaults from `settings` to the `app` and
+/// initialize the `audio_player` accordingly.
+pub fn apply_playback_defaults(app: &mut App, audio_player: &AudioPlayer) -> Option<Vec<usize>> {
     // Initialize playback defaults in the audio thread.
     let mut pending_shuffle_reselect_from: Option<Vec<usize>> = None;
     if app.shuffle {
-        // When shuffle becomes active, move cursor to top of the randomized order.
-        // We snapshot the current order and then wait until the audio thread publishes a new one.
         pending_shuffle_reselect_from = app
             .order_handle
             .as_ref()

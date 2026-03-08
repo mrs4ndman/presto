@@ -3,8 +3,8 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use rand::prelude::ThreadRng;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 use rodio::{OutputStreamBuilder, Sink};
 
 use crate::config::AudioSettings;
@@ -14,6 +14,15 @@ use super::queue::reorder_queue_in_place;
 use super::sink::create_sink_at;
 use super::types::{AudioCmd, LoopMode, OrderHandle, PlaybackHandle};
 
+#[inline]
+fn clamp_volume(v: f32) -> f32 {
+    v.clamp(0.0, 1.0)
+}
+
+/// Spawn the audio thread which processes `AudioCmd` messages and drives playback.
+///
+/// This runs a dedicated thread handling decoding, sinks, shuffle, queueing and
+/// crossfade logic. It returns a `JoinHandle` for the spawned thread.
 pub(super) fn spawn_audio_thread(
     tracks: Vec<Track>,
     rx: Receiver<AudioCmd>,
@@ -22,7 +31,8 @@ pub(super) fn spawn_audio_thread(
     audio_settings: AudioSettings,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        let stream = OutputStreamBuilder::open_default_stream().expect("ERR: No audio output device");
+        let stream =
+            OutputStreamBuilder::open_default_stream().expect("ERR: No audio output device");
         // rodio logs to stderr when OutputStream is dropped. That's useful in debugging,
         // but noisy for a TUI app.
         let mut stream = stream;
@@ -46,17 +56,21 @@ pub(super) fn spawn_audio_thread(
         let mut queue_pos: usize = 0;
 
         let mut loop_mode: LoopMode = LoopMode::default();
+        let mut volume: f32 = clamp_volume(audio_settings.initial_volume_percent as f32 / 100.0);
 
         // Spawn a ticker thread to update playback_info.elapsed periodically.
         let info_for_ticker_clone = playback_info.clone();
-        thread::spawn(move || loop {
-            thread::sleep(Duration::from_millis(500));
-            let mut info = info_for_ticker_clone.lock().unwrap();
-            if info.playing {
-                info.elapsed = info.elapsed + Duration::from_millis(500);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_millis(500));
+                let mut info = info_for_ticker_clone.lock().unwrap();
+                if info.playing {
+                    info.elapsed = info.elapsed + Duration::from_millis(500);
+                }
             }
         });
 
+        /// Start playback of a specific index and update queue/order tracking.
         fn do_play(
             i: usize,
             stream: &rodio::OutputStream,
@@ -73,6 +87,7 @@ pub(super) fn spawn_audio_thread(
             order: &Vec<usize>,
             order_pos: &mut usize,
             audio_settings: &AudioSettings,
+            volume: f32,
         ) {
             let crossfade_ms = audio_settings.crossfade_ms;
             let crossfade_steps = audio_settings.crossfade_steps.max(1);
@@ -80,7 +95,7 @@ pub(super) fn spawn_audio_thread(
             let track = &tracks[i];
             let new_sink = create_sink_at(stream, track, Duration::ZERO);
             // Keep the default volume sane even if crossfade is disabled.
-            new_sink.set_volume(1.0);
+            new_sink.set_volume(volume);
 
             // Crossfade if currently playing a sink; otherwise just swap.
             if let Some(old_sink) = sink.as_ref() {
@@ -89,7 +104,7 @@ pub(super) fn spawn_audio_thread(
                         // Crossfade disabled: hard swap.
                         old_sink.stop();
                     } else {
-                        old_sink.set_volume(1.0);
+                        old_sink.set_volume(volume);
                         new_sink.set_volume(0.0);
                         new_sink.play();
 
@@ -97,8 +112,8 @@ pub(super) fn spawn_audio_thread(
                         // for a TUI player; audio continues in rodio's mixer thread.
                         for step in 1..=crossfade_steps {
                             let t = (step as f32) / (crossfade_steps as f32);
-                            old_sink.set_volume(1.0 - t);
-                            new_sink.set_volume(t);
+                            old_sink.set_volume(volume * (1.0 - t));
+                            new_sink.set_volume(volume * t);
                             thread::sleep(Duration::from_millis(
                                 (crossfade_ms / crossfade_steps).max(1),
                             ));
@@ -134,6 +149,7 @@ pub(super) fn spawn_audio_thread(
             }
         }
 
+        /// Stop playback and reset shared playback state.
         fn do_stop(
             sink: &mut Option<Sink>,
             index: &mut Option<usize>,
@@ -157,17 +173,19 @@ pub(super) fn spawn_audio_thread(
             }
         }
 
-        fn fade_out_sink(sink: &Sink, fade_out_ms: u64) {
+        /// Fade the sink to silence over `fade_out_ms` in fixed steps.
+        fn fade_out_sink(sink: &Sink, fade_out_ms: u64, current_volume: f32) {
+            let start_volume = clamp_volume(current_volume);
             if fade_out_ms == 0 {
                 sink.set_volume(0.0);
                 return;
             }
             let steps: u64 = 20;
             let step_ms = (fade_out_ms / steps).max(1);
-            sink.set_volume(1.0);
+            sink.set_volume(start_volume);
             for step in 1..=steps {
                 let t = step as f32 / steps as f32;
-                sink.set_volume(1.0 - t);
+                sink.set_volume(start_volume * (1.0 - t));
                 thread::sleep(Duration::from_millis(step_ms));
             }
             sink.set_volume(0.0);
@@ -199,6 +217,7 @@ pub(super) fn spawn_audio_thread(
 
                         let track = &tracks[i];
                         let new_sink = create_sink_at(&stream, track, new_elapsed);
+                        new_sink.set_volume(volume);
                         if paused {
                             new_sink.pause();
                             started_at = None;
@@ -237,6 +256,7 @@ pub(super) fn spawn_audio_thread(
                             &order,
                             &mut order_pos,
                             &audio_settings,
+                            volume,
                         );
                     }
 
@@ -278,10 +298,17 @@ pub(super) fn spawn_audio_thread(
                         }
                     }
 
+                    AudioCmd::SetVolume(v) => {
+                        volume = clamp_volume(v);
+                        if let Some(ref s) = sink {
+                            s.set_volume(volume);
+                        }
+                    }
+
                     AudioCmd::ToggleShuffle => {
                         shuffle = !shuffle;
                         if shuffle {
-                            order.shuffle(&mut thread_rng());
+                            order.shuffle(&mut ThreadRng::default());
                         } else {
                             order = (0..tracks.len()).collect();
                         }
@@ -365,6 +392,7 @@ pub(super) fn spawn_audio_thread(
                                     &order,
                                     &mut order_pos,
                                     &audio_settings,
+                                    volume,
                                 );
                             }
                             // NoLoop: do nothing
@@ -386,6 +414,7 @@ pub(super) fn spawn_audio_thread(
                                 &order,
                                 &mut order_pos,
                                 &audio_settings,
+                                volume,
                             );
                         }
                     }
@@ -416,6 +445,7 @@ pub(super) fn spawn_audio_thread(
                                     &order,
                                     &mut order_pos,
                                     &audio_settings,
+                                    volume,
                                 );
                             }
                             // NoLoop: do nothing
@@ -437,13 +467,14 @@ pub(super) fn spawn_audio_thread(
                                 &order,
                                 &mut order_pos,
                                 &audio_settings,
+                                volume,
                             );
                         }
                     }
                     AudioCmd::Quit { fade_out_ms } => {
                         if let Some(ref s) = sink {
                             // Fade out gently before stopping.
-                            fade_out_sink(s, fade_out_ms);
+                            fade_out_sink(s, fade_out_ms, volume);
                             s.stop();
                         }
                         // Update shared state so UI/MPRIS don't keep showing Playing.
@@ -476,6 +507,7 @@ pub(super) fn spawn_audio_thread(
                                             &order,
                                             &mut order_pos,
                                             &audio_settings,
+                                            volume,
                                         );
                                     }
                                 }
@@ -502,6 +534,7 @@ pub(super) fn spawn_audio_thread(
                                             &order,
                                             &mut order_pos,
                                             &audio_settings,
+                                            volume,
                                         );
                                     }
                                 }
@@ -534,6 +567,7 @@ pub(super) fn spawn_audio_thread(
                                                 &order,
                                                 &mut order_pos,
                                                 &audio_settings,
+                                                volume,
                                             );
                                         }
                                     }

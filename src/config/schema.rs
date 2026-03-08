@@ -17,6 +17,7 @@ pub struct Settings {
     pub controls: ControlsSettings,
     pub playback: PlaybackSettings,
     pub library: LibrarySettings,
+    pub state: StateSettings,
 }
 
 impl Default for Settings {
@@ -27,6 +28,7 @@ impl Default for Settings {
             controls: ControlsSettings::default(),
             playback: PlaybackSettings::default(),
             library: LibrarySettings::default(),
+            state: StateSettings::default(),
         }
     }
 }
@@ -42,6 +44,8 @@ pub struct AudioSettings {
     /// Fade-out duration when quitting (milliseconds).
     /// Set to 0 to stop immediately.
     pub quit_fade_out_ms: u64,
+    /// Initial playback volume as a percentage (0-100).
+    pub initial_volume_percent: u8,
 }
 
 impl Default for AudioSettings {
@@ -50,6 +54,7 @@ impl Default for AudioSettings {
             crossfade_ms: 250,
             crossfade_steps: 10,
             quit_fade_out_ms: 500,
+            initial_volume_percent: 50,
         }
     }
 }
@@ -59,6 +64,18 @@ impl Default for AudioSettings {
 pub struct UiSettings {
     /// Whether the cursor starts in "follow playback" mode.
     pub follow_playback: bool,
+
+    /// Enable lyrics loading and lyrics UI surfaces.
+    pub lyrics_enabled: bool,
+
+    /// Show pending count prefixes in the bottom input panel.
+    pub show_pending_count: bool,
+
+    /// Show relative line numbers in the track list.
+    pub show_relative_numbers: bool,
+
+    /// Show the current line number in the track list.
+    pub show_current_line_number: bool,
 
     /// The text rendered inside the top "presto" header box.
     pub header_text: String,
@@ -84,10 +101,18 @@ impl Default for UiSettings {
     fn default() -> Self {
         Self {
             follow_playback: true,
+            lyrics_enabled: false,
+            show_pending_count: true,
+            show_relative_numbers: false,
+            show_current_line_number: false,
             header_text: " ~ And presto! It's music ~ ".to_string(),
             now_playing_track_fields: vec![TrackDisplayField::Display],
             now_playing_track_separator: " - ".to_string(),
-            now_playing_time_fields: vec![TimeField::Elapsed, TimeField::Total, TimeField::Remaining],
+            now_playing_time_fields: vec![
+                TimeField::Elapsed,
+                TimeField::Total,
+                TimeField::Remaining,
+            ],
             now_playing_time_separator: " / ".to_string(),
         }
     }
@@ -98,11 +123,16 @@ impl Default for UiSettings {
 pub struct ControlsSettings {
     /// Number of seconds to scrub when pressing `H` / `L`.
     pub scrub_seconds: u64,
+    /// Percentage step to change volume when pressing `-` / `=`.
+    pub volume_step_percent: u8,
 }
 
 impl Default for ControlsSettings {
     fn default() -> Self {
-        Self { scrub_seconds: 5 }
+        Self {
+            scrub_seconds: 5,
+            volume_step_percent: 5,
+        }
     }
 }
 
@@ -185,6 +215,19 @@ pub struct LibrarySettings {
     pub display_fields: Vec<TrackDisplayField>,
     /// Separator used to join `display_fields`.
     pub display_separator: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct StateSettings {
+    /// Enable per-directory state load/persist.
+    pub enabled: bool,
+}
+
+impl Default for StateSettings {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
 }
 
 impl Default for LibrarySettings {

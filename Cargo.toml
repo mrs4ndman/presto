@@ -1,7 +1,15 @@
 [package]
 name = "presto"
-version = "0.1.0"
+description = "A simple TUI music player with Vim bindings"
+version = "0.1.1"
 edition = "2024"
+authors = ["Juan Mañanes"]
+repository = "https://github.com/mrs4ndman/presto"
+license = "MIT"
+readme = "README.md"
+homepage = "https://presto.mrs4ndman.dev"
+keywords = ["music", "terminal", "vi-like", "player", "utility"]
+categories = ["command-line-utilities", "multimedia::audio"]
 
 [dependencies]
 crossterm = "0.29.0"
@@ -9,12 +17,13 @@ ratatui = "0.30.0"
 rodio = "0.21.1"
 walkdir = "2.5.0"
 async-io = "2.6.0"
-zbus = { version = "4.4.0", default-features = true }
-zvariant = "4.2.0"
-rand = "0.8"
-lofty = "0.18"
+zbus = { version = "5.13.2", default-features = true }
+zvariant = "5.9.2"
+rand = "0.10"
+lofty = "0.23"
 config = { version = "0.15.19", features = ["toml"] }
 serde = { version = "1", features = ["derive"] }
+toml = "0.9.12"
 
 [dev-dependencies]
 tempfile = "3"

@@ -2,6 +2,10 @@ use std::path::Path;
 
 use crate::config::TrackDisplayField;
 
+/// Build a display string for a track according to the provided `fields` and separator.
+///
+/// This composes metadata fields (artist, title, album, filename, path) in the
+/// configured order and falls back to `title` when no parts were produced.
 pub fn display_from_fields(
     path: &Path,
     title: &str,

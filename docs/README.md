@@ -6,6 +6,20 @@ Presto is a terminal music player (Rust + ratatui) with keyboard-first navigatio
 This page is the entry point for the web documentation (GitHub Pages). Use it as an index into the rest of the docs.
 
 ## Quick start
+### From `crates.io`
+
+- You can now download and compile `presto` from the `crates.io` repository:
+
+```bash
+cargo install presto
+```
+
+- This command will place the `presto` executable in the `~/.cargo/bin`
+  directory.
+
+--- 
+
+### From source
 
 Build:
 
@@ -38,11 +52,14 @@ Implementation and contributor notes:
 - Architecture and code map: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Development workflow: [DEVELOPMENT.md](DEVELOPMENT.md)
 - MPRIS / `playerctl` integration: [MPRIS.md](MPRIS.md)
-- Design notes (assumptions, pitfalls, tradeoffs): [LEARNING.md](LEARNING.md)
+- Design notes (assumptions, pitfalls, tradeoffs): [ORGANIZATION.md](ORGANIZATION.md)
 
 ## Behavior notes (high signal)
 
 - Startup directory: if you don’t pass `music_dir`, Presto scans the current working directory.
+- State persistence: per-directory selection/filter/shuffle/loop are saved to `state.toml` next to the config file.
+- Filtering: search now matches query terms word-by-word, in order, instead of letting one term drift across multiple title words.
+- Lyrics: embedded lyrics are opt-in via config and render in a right-side pane with `gl`; timed lyrics emphasize the current line.
 - Seeking/scrubbing: implemented by rebuilding the audio sink and skipping forward in the decoder stream; accuracy varies by codec/container.
 - Quit: uses a short fade-out to avoid an abrupt stop.
 

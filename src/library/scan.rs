@@ -1,7 +1,8 @@
 use std::path::Path;
 use std::time::Duration;
 
-use lofty::{AudioFile, ItemKey, TaggedFileExt};
+// use lofty::{AudioFile, ItemKey, TaggedFileExt};
+use lofty::prelude::*;
 use walkdir::WalkDir;
 
 use crate::config::LibrarySettings;
@@ -9,6 +10,7 @@ use crate::config::LibrarySettings;
 use super::display::display_from_fields;
 use super::model::Track;
 
+/// Return true when `path`'s extension matches configured audio extensions.
 fn is_audio_file(path: &Path, settings: &LibrarySettings) -> bool {
     let exts: Vec<String> = settings
         .extensions
@@ -26,6 +28,7 @@ fn is_audio_file(path: &Path, settings: &LibrarySettings) -> bool {
         .unwrap_or(false)
 }
 
+/// Return true if the path's final component is a hidden (dot) file.
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .and_then(|s| s.to_str())
@@ -33,6 +36,8 @@ fn is_hidden(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Scan `dir` for audio files according to `settings` and return a sorted list
+/// of `Track` entries with metadata extracted when available.
 pub fn scan(dir: &Path, settings: &LibrarySettings) -> Vec<Track> {
     let mut tracks: Vec<Track> = Vec::new();
 
@@ -73,18 +78,18 @@ pub fn scan(dir: &Path, settings: &LibrarySettings) -> Vec<Track> {
                 duration = Some(tagged.properties().duration());
 
                 if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
-                    if let Some(v) = tag.get_string(&ItemKey::TrackTitle) {
+                    if let Some(v) = tag.get_string(ItemKey::TrackTitle) {
                         if !v.trim().is_empty() {
                             title = v.to_string();
                         }
                     }
-                    if let Some(v) = tag.get_string(&ItemKey::TrackArtist) {
+                    if let Some(v) = tag.get_string(ItemKey::TrackArtist) {
                         let v = v.trim();
                         if !v.is_empty() {
                             artist = Some(v.to_string());
                         }
                     }
-                    if let Some(v) = tag.get_string(&ItemKey::AlbumTitle) {
+                    if let Some(v) = tag.get_string(ItemKey::AlbumTitle) {
                         let v = v.trim();
                         if !v.is_empty() {
                             album = Some(v.to_string());
