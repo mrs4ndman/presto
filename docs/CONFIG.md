@@ -1,85 +1,82 @@
 # Configuration (`config.toml`)
 
-Presto supports an optional `config.toml` file for user-tunable settings.
+Presto reads settings from TOML with optional environment overrides.
 
 ## Location
 
-By default on Linux (XDG), Presto looks here:
+Default Linux/XDG path:
 
 - `$XDG_CONFIG_HOME/presto/config.toml`
 - fallback: `~/.config/presto/config.toml`
 
-You can also override the path entirely with:
+Override explicit path:
 
-- `PRESTO_CONFIG_PATH=/some/path/config.toml`
+- `PRESTO_CONFIG_PATH=/absolute/path/config.toml`
 
 ## Precedence
 
-Highest wins:
-
-1. Environment variables (prefix `PRESTO__`, `__` separates nested fields)
+1. Environment variables (`PRESTO__SECTION__KEY=value`)
 2. `config.toml`
-3. Built-in defaults
+3. Built-in defaults (`src/config/schema.rs`)
 
-Example environment override:
+Example:
 
 ```sh
 PRESTO__AUDIO__CROSSFADE_MS=0 presto
 ```
 
-## Schema
-
-### `[playback]`
-
-- `shuffle` (bool): start with shuffle enabled
-- `loop_mode` (string): one of `no-loop`, `loop-all`/`loop-around`, `loop-one`/`repeat-one`
-
-Defaults:
-
-- `shuffle = false`
-- `loop_mode = "loop-all"` (loop-around)
+## Sections
 
 ### `[audio]`
 
-- `crossfade_ms` (u64, milliseconds): crossfade when switching tracks (`0` disables)
-- `crossfade_steps` (u64): number of fade steps (must be `>= 1`)
-- `quit_fade_out_ms` (u64, milliseconds): fade out on quit (`0` disables)
-- `initial_volume_percent` (u8, 0-100): starting volume level
-
-### `[controls]`
-- `scrub_seconds` (u64): seconds to seek when pressing `H` / `L`
-- `volume_step_percent` (u8): percentage points to change volume per `-` / `+` press
+- `crossfade_ms` (u64, default `250`)
+- `crossfade_steps` (u64, default `10`, must be `>= 1`)
+- `quit_fade_out_ms` (u64, default `500`)
+- `initial_volume_percent` (u8, default `50`, range `0..=100`)
 
 ### `[ui]`
 
-- `follow_playback` (bool): start in follow-playback mode
-- `lyrics_enabled` (bool): enable embedded lyrics loading and the `gl` lyrics popup
-- `show_pending_count` (bool): show typed count prefixes in the bottom input panel
-- `show_relative_numbers` (bool): show relative line numbers in the track list
-- `show_current_line_number` (bool): show the current line number in the track list
-- `header_text` (string): the text rendered in the top "presto" box
-- `now_playing_track_fields` (array of strings): which fields to show for the status "Song:" label
-	- allowed: `display`, `title`, `artist`, `album`, `filename`, `path`
-- `now_playing_track_separator` (string): how to join those fields
-- `now_playing_time_fields` (array of strings): which time fields to show (and order)
-	- allowed: `elapsed`, `total`, `remaining`
-- `now_playing_time_separator` (string): how to join those time fields
+- `follow_playback` (bool, default `true`)
+- `lyrics_enabled` (bool, default `false`)
+- `show_pending_count` (bool, default `true`)
+- `show_relative_numbers` (bool, default `false`)
+- `show_current_line_number` (bool, default `false`)
+- `header_text` (string)
+- `now_playing_track_fields` (array): `display|title|artist|album|filename|path`
+- `now_playing_track_separator` (string)
+- `now_playing_time_fields` (array): `elapsed|total|remaining`
+- `now_playing_time_separator` (string)
+
+### `[controls]`
+
+- `scrub_seconds` (u64, default `5`)
+- `volume_step_percent` (u8, default `5`)
+
+### `[playback]`
+
+- `shuffle` (bool, default `false`)
+- `loop_mode` (string, default `loop-all`)
+  - accepted aliases:
+    - no loop: `no-loop`, `no_loop`
+    - loop all: `loop-all`, `loop_all`, `loopall`, `loop-around`
+    - loop one: `loop-one`, `loop_one`, `loopone`, `repeat-one`
 
 ### `[library]`
 
-- `extensions` (array of strings): audio extensions (without dot)
-- `follow_links` (bool): follow symlinks while scanning
-- `include_hidden` (bool): scan dotfiles/directories
-- `recursive` (bool): recurse into subdirectories
-- `max_depth` (int or omitted): max directory depth
-- `display_fields` (array of strings): how to build the track list label (`Track.display`)
-	- allowed: `display`, `artist`, `title`, `album`, `filename`, `path`
-- `display_separator` (string): joiner used for `display_fields`
+- `extensions` (`["mp3","flac","wav","ogg"]` by default)
+- `follow_links` (bool, default `true`)
+- `include_hidden` (bool, default `true`)
+- `recursive` (bool, default `true`)
+- `max_depth` (optional integer)
+- `display_fields` (array): same enum as `now_playing_track_fields`
+- `display_separator` (string)
 
 ### `[state]`
 
-- `enabled` (bool): enable per-directory state load/persist (defaults to false)
+- `enabled` (bool, default `false`)
+
+When enabled, per-directory state is loaded/saved in `state.toml` next to config.
 
 ## Example
 
-See `docs/config.example.toml` for a full example.
+See [config.example.toml](config.example.toml).

@@ -39,8 +39,8 @@ show_pending_count = true
 # Line numbers in the track list
 # show_relative_numbers: show distance from the selected row
 # show_current_line_number: show absolute number for the selected row
-show_relative_numbers = true
-show_current_line_number = true
+show_relative_numbers = false
+show_current_line_number = false
 
 # Header text (top box)
 header_text = " ~ And presto! It's music ~ "

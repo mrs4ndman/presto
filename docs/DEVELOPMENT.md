@@ -1,81 +1,61 @@
 # Development
 
-This page is for contributors working on Presto locally.
-
 ## Prerequisites
 
-- Rust toolchain (stable)
-- ALSA/PulseAudio/PipeWire audio output (depending on your Linux setup)
-- A working user session D-Bus if you want to exercise MPRIS
+- Rust stable toolchain
+- Linux audio stack (ALSA/Pulse/PipeWire)
+- User session D-Bus for MPRIS testing
 
 ## Common commands
 
-Build:
-
 ```sh
 cargo build
-```
-
-Run (scan current directory):
-
-```sh
-cargo run
-```
-
-Run with a directory:
-
-```sh
 cargo run -- /path/to/music
-```
-
-Run tests:
-
-```sh
 cargo test
-```
-
-Format:
-
-```sh
 cargo fmt
-```
-
-Lint:
-
-```sh
 cargo clippy
 ```
 
-## Where to start in the code
+## Where to start in code
 
-- `src/main.rs`: event loop and glue code
-- `src/app.rs`: application state and navigation/filtering logic
-- `src/ui.rs`: ratatui layout and rendering
-- `src/audio.rs`: audio thread, queue semantics, crossfade/seek behavior
-- `src/mpris.rs`: MPRIS D-Bus interface implementation
+- `src/runtime/event_loop.rs`: keyboard/mpris orchestration
+- `src/app/model.rs`: core app state + filtering/navigation
+- `src/audio/thread.rs`: playback engine and queue progression
+- `src/ui/mod.rs`: render orchestration
+- `src/ui/panes.rs`: concrete UI widgets
+- `src/config/schema.rs`: settings and defaults
+- `src/runtime/state.rs`: persisted per-directory state
+
+## Safe change workflow
+
+1. Change one subsystem at a time.
+2. Run `cargo test` after each logical step.
+3. If keybindings or behavior changed, update docs:
+   - `docs/CONTROLS.md`
+   - `docs/CONFIG.md`
+   - `docs/TROUBLESHOOTING.md`
+4. Run `cargo fmt` before finalizing.
 
 ## Debugging tips
 
 ### Audio issues
 
-- If you get `ERR: No audio output device`, rodio could not open a default output device.
-  - Check that an output device exists and your user can access it.
-  - If you run in a container/SSH session, you may not have an audio device.
+If you see no output device errors, verify local audio access and run outside headless/container sessions first.
 
 ### MPRIS issues
 
-- If Presto runs but `playerctl -l` does not show it:
-  - You are likely missing a user session bus (common on headless shells).
+Use:
 
-### TUI rendering/input
+```sh
+playerctl -l
+playerctl -p presto status
+playerctl -p presto metadata
+```
 
-- If input feels unresponsive, make sure you’re not in a terminal multiplexer mode that eats key chords.
-- Run with a larger terminal size when debugging layout problems; the UI intentionally uses fixed vertical sections.
+If the player is not listed, session D-Bus is usually missing.
 
-## Design constraints (practical)
+### UI behavior issues
 
-- Presto keeps the audio thread as the owner of the rodio sink.
-- The UI thread is intentionally dumb: it renders from `App` and sends commands.
-- Seeking is implemented via sink rebuild + decoder skipping, which is simple and works widely, but isn’t perfect for all codecs.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the deeper explanation.
+- Confirm whether the app is in filter mode vs normal mode.
+- Confirm `follow_playback` state when selection appears to jump.
+- For list behavior, inspect `display_indices()` and queue-dirty syncing in `event_loop.rs`.
