@@ -164,10 +164,7 @@ pub fn apply_filter_and_selection(app: &mut App, state: Option<&DirectoryState>)
             app.set_initial_volume_percent(pct);
         }
 
-        let candidate_path = st
-            .last_played_path
-            .as_ref()
-            .or(st.selected_path.as_ref());
+        let candidate_path = st.last_played_path.as_ref().or(st.selected_path.as_ref());
 
         let mut selected_set = false;
         if let Some(path) = candidate_path {

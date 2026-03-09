@@ -1,72 +1,31 @@
+# Presto Docs
 
-# Presto
+Presto is a terminal music player built with Rust, `ratatui`, `rodio`, and MPRIS.
 
-Presto is a terminal music player (Rust + ratatui) with keyboard-first navigation and MPRIS support.
+This folder documents the current codebase state.
 
-This page is the entry point for the web documentation (GitHub Pages). Use it as an index into the rest of the docs.
+## Start here
 
-## Quick start
-### From `crates.io`
+- User guide / keybindings: [CONTROLS.md](CONTROLS.md)
+- Configuration reference: [CONFIG.md](CONFIG.md)
+- Common issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-- You can now download and compile `presto` from the `crates.io` repository:
+## Contributor docs
 
-```bash
-cargo install presto
-```
+- System architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Dev workflow: [DEVELOPMENT.md](DEVELOPMENT.md)
+- MPRIS integration: [MPRIS.md](MPRIS.md)
+- Engineering notes: [LEARNING.md](LEARNING.md)
+- Product direction: [ORGANIZATION.md](ORGANIZATION.md)
 
-- This command will place the `presto` executable in the `~/.cargo/bin`
-  directory.
+## Runtime summary
 
---- 
+- Entry point: `src/main.rs` -> `runtime::run()`
+- UI draw path: `src/ui/mod.rs` + `src/ui/*`
+- Audio ownership: dedicated audio thread in `src/audio/thread.rs`
+- Library scan: `src/library/scan.rs`
+- MPRIS service: `src/mpris.rs`
+- Optional state persistence: `src/runtime/state.rs`
 
-### From source
 
-Build:
-
-```sh
-cargo build
-```
-
-Run (scan current directory):
-
-```sh
-cargo run
-```
-
-Run with an explicit music directory:
-
-```sh
-cargo run -- /path/to/music
-```
-
-## Documentation index
-
-Start here:
-
-- Controls and keys: [CONTROLS.md](CONTROLS.md)
-- Configuration: [CONFIG.md](CONFIG.md)
-- Troubleshooting common issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-
-Implementation and contributor notes:
-
-- Architecture and code map: [ARCHITECTURE.md](ARCHITECTURE.md)
-- Development workflow: [DEVELOPMENT.md](DEVELOPMENT.md)
-- MPRIS / `playerctl` integration: [MPRIS.md](MPRIS.md)
-- Design notes (assumptions, pitfalls, tradeoffs): [ORGANIZATION.md](ORGANIZATION.md)
-
-## Behavior notes (high signal)
-
-- Startup directory: if you don’t pass `music_dir`, Presto scans the current working directory.
-- State persistence: per-directory selection/filter/shuffle/loop are saved to `state.toml` next to the config file.
-- Filtering: search now matches query terms word-by-word, in order, instead of letting one term drift across multiple title words.
-- Lyrics: embedded lyrics are opt-in via config and render in a right-side pane with `gl`; timed lyrics emphasize the current line.
-- Seeking/scrubbing: implemented by rebuilding the audio sink and skipping forward in the decoder stream; accuracy varies by codec/container.
-- Quit: uses a short fade-out to avoid an abrupt stop.
-
-## If you’re changing the code
-
-If you change user-visible behavior, please update at least one of:
-
-- [CONTROLS.md](CONTROLS.md) for keybinds and UX behavior
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if it affects common failure modes
-- [ARCHITECTURE.md](ARCHITECTURE.md) if it changes program structure or invariants
+##### THANK YOU FOR TAKING A LOOK ;)

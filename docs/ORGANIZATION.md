@@ -1,82 +1,37 @@
-# Organization + Future plans / Ideas (OLD)
+# Organization and Direction
 
-## 1. ***PURPOSE***
-- Lightweight TUI music player + library manager (playlists and such)
-- Keyboard-centric controls (Vim-bindings first, Emacs as backup)
-- Not necessarily meant for remote usage, oriented for people with simple
-  workflows / needs.
+This document captures current product scope and near-term direction.
 
----
+## Current scope
 
-## 2. ***AUDIO BACKEND***
-- Audio library: implementation for it, not a wrapper ideally
-- Local-files only, no streaming
-- Playlist system, but considering queues at the moment
+Presto is a local-file, terminal-first music player with:
 
----
+- keyboard-centric navigation
+- queue-based playback semantics
+- optional per-directory state persistence
+- MPRIS control integration
 
-## 3. ***DATA MODEL***
-- Elements:
-    - Track
-    - Album
-    - Artist
-    - Playslist / Queue
-- Want to support many formats: MP3, FLAC, etc.
-- Caching for entire playlists and song metadata, editing on the fly
-- Resizable song pool to build playlists from
+## Non-goals (current)
 
----
+- streaming services
+- multi-client server architecture (today's app is single local process)
+- heavyweight library database beyond runtime scan + lightweight persisted state
 
-## 4. ***APPLICATION STATE***
-- Multiple-server + multiple-frontends architecture
-- Spin up single server on single folders (kinda like doing a single playlist) vs.
-  using the entire library (user-defined dirs)
-- Clients get the playback state for the specific server they're connecting to
-- Modal navigation for the front-ends: keyboard-driven
+## Design principles
 
----
+- Keep runtime responsive by isolating audio in its own thread.
+- Keep UI logic deterministic and derived from `App` state.
+- Prefer small focused modules over monolithic files.
+- Keep defaults simple; advanced behavior opt-in via config.
 
-## 5. ***KEYBINDINGS & SETTINGS***
-- Vim-based
-- User-definable
-- Sane defaults with arrows too
-- Config file for all settings (TOML probably)
-- Theming extensibility
+## Near-term improvements
 
----
+- Status line configurability (show/hide segments)
+- Additional tests around UI list-window calculations
+- Better diagnostics for audio and DBus startup failures
 
-## 6. ***FUTURE LAYOUT***
+## Longer-term ideas
 
-```
-presto/
-├── presto-core/
-│   ├── audio/
-│   ├── library/
-│   ├── queue/
-│   ├── state/
-│   └── events/
-├── presto-server/
-│   ├── main.rs
-│   ├── ipc/
-│   └── server.rs
-├── presto-tui/
-│   ├── main.rs
-│   ├── app.rs
-│   └── ui.rs
-└── Cargo.toml (workspace)
-```
-
----
-
-## 7. ***SERVER LIFECYCLE (PERSISTENT)***
-
-```
-presto-server
-  ├─ check if socket exists
-  ├─ if running → exit with message
-  ├─ scan music directory
-  ├─ build track list
-  ├─ start audio thread
-  ├─ start IPC listener
-  └─ idle
-```
+- Theming
+- richer listening stats
+- optional cross-platform polish for config/state and media key behavior
