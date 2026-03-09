@@ -47,7 +47,9 @@ fn parse_timestamp_tag(tag: &str) -> Option<Duration> {
     }
 
     let millis = match fraction {
-        Some(fraction) if !fraction.is_empty() && fraction.chars().all(|ch| ch.is_ascii_digit()) => {
+        Some(fraction)
+            if !fraction.is_empty() && fraction.chars().all(|ch| ch.is_ascii_digit()) =>
+        {
             let digits = fraction.len().min(3);
             let value: u64 = fraction[..digits].parse().ok()?;
             match digits {
@@ -201,7 +203,10 @@ mod tests {
         tag.insert_text(ItemKey::Lyrics, "Line 1\nLine 2".to_string());
         tag.insert_text(ItemKey::UnsyncLyrics, "Fallback".to_string());
 
-        assert_eq!(lyrics_from_tag(&tag), Some(Lyrics::Plain("Line 1\nLine 2".to_string())));
+        assert_eq!(
+            lyrics_from_tag(&tag),
+            Some(Lyrics::Plain("Line 1\nLine 2".to_string()))
+        );
     }
 
     #[test]
@@ -209,7 +214,10 @@ mod tests {
         let mut tag = Tag::new(TagType::Id3v2);
         tag.insert_text(ItemKey::UnsyncLyrics, "Unsynced lyrics".to_string());
 
-        assert_eq!(lyrics_from_tag(&tag), Some(Lyrics::Plain("Unsynced lyrics".to_string())));
+        assert_eq!(
+            lyrics_from_tag(&tag),
+            Some(Lyrics::Plain("Unsynced lyrics".to_string()))
+        );
     }
 
     #[test]
@@ -218,7 +226,10 @@ mod tests {
         tag.insert_text(ItemKey::Lyrics, "   ".to_string());
         tag.insert_text(ItemKey::UnsyncLyrics, "  Actual lyrics  ".to_string());
 
-        assert_eq!(lyrics_from_tag(&tag), Some(Lyrics::Plain("Actual lyrics".to_string())));
+        assert_eq!(
+            lyrics_from_tag(&tag),
+            Some(Lyrics::Plain("Actual lyrics".to_string()))
+        );
     }
 
     #[test]

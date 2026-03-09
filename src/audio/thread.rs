@@ -3,8 +3,8 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use rand::seq::SliceRandom;
 use rand::prelude::ThreadRng;
+use rand::seq::SliceRandom;
 use rodio::{OutputStreamBuilder, Sink};
 
 use crate::config::AudioSettings;

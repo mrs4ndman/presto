@@ -6,14 +6,14 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style, Stylize},
+    style::{Color, Modifier, Style, Stylize},
     widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap},
 };
 use std::{collections::BTreeMap, sync::LazyLock, time::Duration};
 
 use crate::app::App;
-use crate::library::{Lyrics, TimedLyricLine};
 use crate::config::{ControlsSettings, TimeField, TrackDisplayField, UiSettings};
+use crate::library::{Lyrics, TimedLyricLine};
 
 static CONTROLS_MAP: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
     let mut map: BTreeMap<String, String> = BTreeMap::new();
@@ -322,8 +322,12 @@ fn status_text(app: &App, ui_settings: &UiSettings) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{bottom_info_text, wrap_text_lines};
+    use super::{bottom_info_text, timed_lyrics_lines, wrap_text_lines};
     use crate::{app::App, config::UiSettings};
+    use ratatui::style::Color;
+    use std::time::Duration;
+
+    use crate::library::TimedLyricLine;
 
     #[test]
     fn wrap_text_preserves_multiple_spaces() {
@@ -350,7 +354,42 @@ mod tests {
         app.pending_count = Some(12);
         ui.show_pending_count = false;
 
-        assert_eq!(bottom_info_text(&app, &ui), Some("Filter: black sabbath".to_string()));
+        assert_eq!(
+            bottom_info_text(&app, &ui),
+            Some("Filter: black sabbath".to_string())
+        );
+    }
+
+    #[test]
+    fn timed_lyrics_styles_past_lines_as_dark_gray() {
+        let lines = vec![
+            TimedLyricLine {
+                timestamp: Duration::from_secs(0),
+                text: "line 1".to_string(),
+            },
+            TimedLyricLine {
+                timestamp: Duration::from_secs(5),
+                text: "line 2".to_string(),
+            },
+            TimedLyricLine {
+                timestamp: Duration::from_secs(10),
+                text: "line 3".to_string(),
+            },
+        ];
+
+        let rendered = timed_lyrics_lines(&lines, Duration::from_secs(6), 10);
+
+        let first_style = rendered[0].spans[0].style;
+        let second_style = rendered[1].spans[0].style;
+        let third_style = rendered[2].spans[0].style;
+
+        assert_eq!(first_style.fg, Some(Color::DarkGray));
+        assert!(
+            second_style
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        );
+        assert_eq!(third_style.fg, None);
     }
 }
 
@@ -564,6 +603,7 @@ fn timed_lyrics_lines(
             Some(active_idx) if absolute_idx == active_idx => {
                 Style::default().add_modifier(Modifier::BOLD)
             }
+            Some(active_idx) if absolute_idx < active_idx => Style::default().fg(Color::DarkGray),
             _ => Style::default(),
         };
         rendered.push(Line::from(Span::styled(line.text.clone(), style)));

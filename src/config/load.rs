@@ -62,8 +62,9 @@ impl Settings {
             .collect();
 
         if trimmed_exts.is_empty() {
-            errors.push("library.extensions must include at least one non-empty extension"
-                .to_string());
+            errors.push(
+                "library.extensions must include at least one non-empty extension".to_string(),
+            );
         } else if trimmed_exts.len() != self.library.extensions.len() {
             errors.push("library.extensions must not contain empty entries".to_string());
         }
