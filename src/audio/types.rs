@@ -44,6 +44,8 @@ pub enum AudioCmd {
     Prev,
     /// Quit the audio thread, optionally fading out over `fade_out_ms` milliseconds.
     Quit { fade_out_ms: u64 },
+    /// Skip by `x` amount forwards or backwards
+    SkipBy(i32),
     /// Seek by the specified number of seconds (positive or negative).
     SeekBy(i32), // seconds, positive or negative
 }

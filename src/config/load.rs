@@ -41,6 +41,9 @@ impl Settings {
         if self.controls.scrub_seconds == 0 {
             errors.push("controls.scrub_seconds must be >= 1".to_string());
         }
+        if self.controls.scrub_batch_window_ms > i32::MAX as u64 {
+            errors.push("controls.scrub_batch_window_ms must be <= 2147483647".to_string());
+        }
         if self.controls.volume_step_percent == 0 {
             errors.push("controls.volume_step_percent must be >= 1".to_string());
         }

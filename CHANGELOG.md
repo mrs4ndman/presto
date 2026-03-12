@@ -46,3 +46,7 @@
 | 09-03-2026        | Tweak: Make filtering word-by-word instead of cross-title spare-letter matching         | Query terms now match title words in order                  |
 | 09-03-2026        | Testing: Add focused coverage for lyrics cache state, count-display config, and filter matching | Locks down the new UI/config behavior                        |
 | 09-03-2026        | Docs: Update controls, config, README, and backlog for lyrics and filter changes        | Reflects the new `gl` pane, config toggles, and completed short-term items |
+| 09-03-2026        | Refactor: Split `ui` into focused submodules (`mod/layout/panes/text/lyrics`)           | Keeps `ui::draw(...)` as the stable render entrypoint       |
+| 09-03-2026        | Docs: Rebuild `docs/` against current codebase architecture and behavior                 | Removes stale `src/ui.rs` references and updates guides     |
+| 12-03-2026        | Feature: Make scrub batching window configurable (`controls.scrub_batch_window_ms`)      | `H/L` debounce now user-tunable; `0` disables batching      |
+| 12-03-2026        | Tweak: Apply counted `h/l` as single skip commands                                       | Avoids repeated step commands and keeps movement consistent  |

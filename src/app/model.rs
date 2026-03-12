@@ -92,6 +92,7 @@ impl App {
             volume: 1.0,
             initial_volume: 1.0,
 
+            // Optional computation help ↑
             lower_titles,
 
             follow_playback: true,
@@ -129,10 +130,12 @@ impl App {
     pub fn mark_queue_dirty(&mut self) {
         self.queue_dirty = true;
     }
+
     /// Clear the "queue dirty" flag.
     pub fn clear_queue_dirty(&mut self) {
         self.queue_dirty = false;
     }
+
     /// Cycle `loop_mode` through `NoLoop -> LoopAll -> LoopOne`.
     pub fn cycle_loop_mode(&mut self) {
         self.loop_mode = match self.loop_mode {
@@ -141,15 +144,18 @@ impl App {
             LoopMode::LoopOne => LoopMode::NoLoop,
         };
     }
+
     /// Enable following playback (cursor follows currently playing track).
     pub fn follow_playback_on(&mut self) {
         self.follow_playback = true;
     }
-    /// Disable follow-playback and clear any pending follow index.
+
+    /// Disable follow-playback and clear any pending follow index (free-roam on)
     pub fn follow_playback_off(&mut self) {
         self.follow_playback = false;
         self.pending_follow_index = None;
     }
+
     /// Return current volume as 0.0-1.0 scalar.
     pub fn volume(&self) -> f32 {
         self.volume
@@ -182,22 +188,27 @@ impl App {
         self.volume = v;
         v
     }
+
     /// Set an index to follow once playback information becomes available.
     pub fn set_pending_follow_index(&mut self, idx: usize) {
         self.pending_follow_index = Some(idx);
     }
+
     /// Clear the pending follow index.
     pub fn clear_pending_follow_index(&mut self) {
         self.pending_follow_index = None;
     }
+
     /// Attach a `PlaybackHandle` used to observe playback progress.
     pub fn set_playback_handle(&mut self, h: PlaybackHandle) {
         self.playback_handle = Some(h);
     }
+
     /// Set the shared `OrderHandle` used for shuffled display order.
     pub fn set_order_handle(&mut self, h: crate::audio::OrderHandle) {
         self.order_handle = Some(h);
     }
+
     /// Record the current directory in the app state.
     pub fn set_current_dir(&mut self, dir: String) {
         self.current_dir = Some(dir);
@@ -343,11 +354,13 @@ impl App {
         self.shuffle = !self.shuffle;
         self.mark_queue_dirty();
     }
+
     /// Set the selected track index and ensure it is visible in the display.
     pub fn set_selected(&mut self, idx: usize) {
         self.selected = idx;
         self.ensure_selected_visible();
     }
+
     /// Return true if the library contains any tracks.
     pub fn has_tracks(&self) -> bool {
         !self.tracks.is_empty()
@@ -478,11 +491,13 @@ impl App {
         self.mark_queue_dirty();
         self.ensure_selected_visible();
     }
+
     /// Exit filter mode and mark the queue dirty.
     pub fn exit_filter_mode(&mut self) {
         self.filter_mode = false;
         self.mark_queue_dirty();
     }
+
     /// Clear the active filter and restore selection visibility.
     pub fn clear_filter(&mut self) {
         self.filter_query.clear();
@@ -490,12 +505,14 @@ impl App {
         self.mark_queue_dirty();
         self.ensure_selected_visible();
     }
+
     /// Append a character to the filter query and refresh view.
     pub fn push_filter_char(&mut self, c: char) {
         self.filter_query.push(c);
         self.mark_queue_dirty();
         self.ensure_selected_visible();
     }
+
     /// Remove the last character from the filter query and refresh view.
     pub fn pop_filter_char(&mut self) {
         self.filter_query.pop();
@@ -516,6 +533,7 @@ impl App {
             self.selected = display[0];
         }
     }
+    ///
     /// Move selection to the next visible track.
     pub fn next(&mut self) {
         if let Some(next) = self.next_in_view_from(self.selected) {

@@ -123,6 +123,9 @@ impl Default for UiSettings {
 pub struct ControlsSettings {
     /// Number of seconds to scrub when pressing `H` / `L`.
     pub scrub_seconds: u64,
+    /// Debounce window for batching rapid `H` / `L` keypresses into one seek (milliseconds).
+    /// Set to 0 to disable batching and seek immediately per keypress.
+    pub scrub_batch_window_ms: u64,
     /// Percentage step to change volume when pressing `-` / `=`.
     pub volume_step_percent: u8,
 }
@@ -131,6 +134,7 @@ impl Default for ControlsSettings {
     fn default() -> Self {
         Self {
             scrub_seconds: 5,
+            scrub_batch_window_ms: 250,
             volume_step_percent: 5,
         }
     }

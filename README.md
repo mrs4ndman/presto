@@ -41,16 +41,15 @@ Finished TODOs will migrate onto the [changelog](CHANGELOG.md).
 <details>
 <summary>List of items to tackle</summary>
 
-- [ ] Enabling re-ordering / disabling some status sections
-
 </details>
 
 ### Long-term
 <details>
 <summary>List of items to tackle / consider</summary>
 
-- [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Theming
+- [ ] Status info rework (more modularity)
+- [ ] Listening stats (amount, usage, recent songs, etc.)
 - [ ] Cross-platform compatibility (config/state paths, media controls, audio backend support)
 - [ ] Server-client restructuring
 

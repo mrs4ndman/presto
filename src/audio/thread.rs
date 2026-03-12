@@ -19,6 +19,29 @@ fn clamp_volume(v: f32) -> f32 {
     v.clamp(0.0, 1.0)
 }
 
+#[inline]
+fn resolve_skip_target(
+    cur_pos: usize,
+    amount: i32,
+    len: usize,
+    loop_mode: LoopMode,
+) -> Option<usize> {
+    if len == 0 || amount == 0 {
+        return None;
+    }
+
+    match loop_mode {
+        LoopMode::LoopAll => {
+            let next = (cur_pos as i64 + amount as i64).rem_euclid(len as i64) as usize;
+            Some(next)
+        }
+        LoopMode::NoLoop | LoopMode::LoopOne => {
+            let next = (cur_pos as i64 + amount as i64).clamp(0, (len - 1) as i64) as usize;
+            if next == cur_pos { None } else { Some(next) }
+        }
+    }
+}
+
 /// Spawn the audio thread which processes `AudioCmd` messages and drives playback.
 ///
 /// This runs a dedicated thread handling decoding, sinks, shuffle, queueing and
@@ -471,6 +494,36 @@ pub(super) fn spawn_audio_thread(
                             );
                         }
                     }
+                    AudioCmd::SkipBy(amount) => {
+                        if tracks.is_empty() || queue.is_empty() {
+                            continue;
+                        }
+
+                        let cur_pos = if index.is_some() { queue_pos } else { 0 };
+                        if let Some(new_pos) =
+                            resolve_skip_target(cur_pos, amount, queue.len(), loop_mode)
+                        {
+                            queue_pos = new_pos;
+                            do_play(
+                                queue[queue_pos],
+                                &stream,
+                                &tracks,
+                                &mut sink,
+                                &mut index,
+                                &mut paused,
+                                &mut started_at,
+                                &mut accumulated,
+                                &playback_info,
+                                &queue,
+                                &mut queue_pos,
+                                shuffle,
+                                &order,
+                                &mut order_pos,
+                                &audio_settings,
+                                volume,
+                            );
+                        }
+                    }
                     AudioCmd::Quit { fade_out_ms } => {
                         if let Some(ref s) = sink {
                             // Fade out gently before stopping.
@@ -581,4 +634,29 @@ pub(super) fn spawn_audio_thread(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_skip_target;
+    use crate::audio::LoopMode;
+
+    #[test]
+    fn resolve_skip_target_wraps_in_loop_all() {
+        assert_eq!(resolve_skip_target(0, -1, 5, LoopMode::LoopAll), Some(4));
+        assert_eq!(resolve_skip_target(4, 2, 5, LoopMode::LoopAll), Some(1));
+    }
+
+    #[test]
+    fn resolve_skip_target_clamps_without_loop() {
+        assert_eq!(resolve_skip_target(0, -3, 5, LoopMode::NoLoop), None);
+        assert_eq!(resolve_skip_target(2, -1, 5, LoopMode::NoLoop), Some(1));
+        assert_eq!(resolve_skip_target(4, 8, 5, LoopMode::NoLoop), None);
+    }
+
+    #[test]
+    fn resolve_skip_target_loop_one_matches_manual_skip_behavior() {
+        assert_eq!(resolve_skip_target(1, 2, 4, LoopMode::LoopOne), Some(3));
+        assert_eq!(resolve_skip_target(0, -1, 4, LoopMode::LoopOne), None);
+    }
 }

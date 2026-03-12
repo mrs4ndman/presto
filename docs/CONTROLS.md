@@ -18,6 +18,7 @@ Numeric count prefixes are supported in normal mode:
 - `Space` or `p`: play/pause
 - `h` / `l`: previous/next track
 - `H` / `L`: seek backward/forward (`controls.scrub_seconds`)
+	- Rapid scrub presses are batched within `controls.scrub_batch_window_ms`
 - `r`: cycle loop mode
 - `s`: toggle shuffle
 - `q`: quit (soft fade when playing)

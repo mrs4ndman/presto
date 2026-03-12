@@ -1,5 +1,5 @@
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::CrosstermBackend};
@@ -50,6 +50,10 @@ pub struct EventLoopState {
     pub last_mpris_index: Option<usize>,
     /// Last-known playback state as emitted to MPRIS.
     pub last_mpris_playback: PlaybackState,
+    /// Accumulated pending scrub delta (seconds) for batched `H`/`L` seeks.
+    pending_scrub_secs: i64,
+    /// Last time a scrub key was pressed.
+    pending_scrub_at: Option<Instant>,
 }
 
 impl EventLoopState {
@@ -61,6 +65,8 @@ impl EventLoopState {
             pending_count: None,
             last_mpris_index: None,
             last_mpris_playback: app.playback,
+            pending_scrub_secs: 0,
+            pending_scrub_at: None,
         }
     }
 
@@ -79,6 +85,15 @@ impl EventLoopState {
         let n = self.pending_count.take().unwrap_or(1);
         n.max(1) as usize
     }
+
+    fn push_scrub_delta(&mut self, delta_secs: i64) {
+        self.pending_scrub_secs = self.pending_scrub_secs.saturating_add(delta_secs);
+        self.pending_scrub_at = Some(Instant::now());
+    }
+}
+
+fn scrub_batch_window(settings: &config::Settings) -> Duration {
+    Duration::from_millis(settings.controls.scrub_batch_window_ms)
 }
 
 #[derive(Debug, PartialEq)]
@@ -161,6 +176,7 @@ pub fn run(
     control_rx: &mpsc::Receiver<ControlCmd>,
     state: &mut EventLoopState,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let batch_window = scrub_batch_window(settings);
     loop {
         // If shuffle just turned on, reselect the first track in the new randomized order.
         let new_order =
@@ -251,6 +267,7 @@ pub fn run(
             }
         }
 
+        flush_pending_scrub(state, audio_player, batch_window, false);
         sync_pending_count(state, app);
         let display = app.display_indices();
         terminal.draw(|f| ui::draw(f, app, &display, &settings.ui, &settings.controls))?;
@@ -420,6 +437,31 @@ fn sync_pending_count(state: &EventLoopState, app: &mut App) {
     app.pending_count = state.pending_count;
 }
 
+/// Send a pending accumulated scrub command when forced or after debounce.
+fn flush_pending_scrub(
+    state: &mut EventLoopState,
+    audio_player: &AudioPlayer,
+    batch_window: Duration,
+    force: bool,
+) {
+    let Some(last_key_at) = state.pending_scrub_at else {
+        return;
+    };
+
+    if !force && last_key_at.elapsed() < batch_window {
+        return;
+    }
+
+    let pending = std::mem::replace(&mut state.pending_scrub_secs, 0);
+    state.pending_scrub_at = None;
+    if pending == 0 {
+        return;
+    }
+
+    let clamped = pending.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    let _ = audio_player.send(AudioCmd::SeekBy(clamped));
+}
+
 /// Route key events to the filter or normal handlers.
 fn handle_key_event(
     key: KeyEvent,
@@ -521,6 +563,12 @@ fn handle_normal_key_event(
     control_tx: &mpsc::Sender<ControlCmd>,
     state: &mut EventLoopState,
 ) -> Result<bool, Box<dyn std::error::Error>> {
+    let is_scrub_key = matches!(key.code, KeyCode::Char('H') | KeyCode::Char('L'));
+    let batch_window = scrub_batch_window(settings);
+    if !is_scrub_key {
+        flush_pending_scrub(state, audio_player, batch_window, true);
+    }
+
     match key.code {
         KeyCode::Esc => {
             if app.controls_popup {
@@ -696,8 +744,14 @@ fn handle_normal_key_event(
                 state.pending_key.clear();
                 let count = state.take_count_or_default();
                 app.pending_count = None;
-                for _ in 0..count {
-                    let _ = control_tx.send(ControlCmd::Next);
+                if app.has_tracks() {
+                    if !app.filter_mode {
+                        app.follow_playback_on();
+                    }
+                    let amount = count.min(i32::MAX as usize) as i32;
+                    let _ = audio_player.send(AudioCmd::SkipBy(amount));
+                    app.playback = PlaybackState::Playing;
+                    update_mpris(mpris, app);
                 }
             }
         }
@@ -705,8 +759,14 @@ fn handle_normal_key_event(
             state.pending_key.clear();
             let count = state.take_count_or_default();
             app.pending_count = None;
-            for _ in 0..count {
-                let _ = control_tx.send(ControlCmd::Prev);
+            if app.has_tracks() {
+                if !app.filter_mode {
+                    app.follow_playback_on();
+                }
+                let amount = count.min(i32::MAX as usize) as i32;
+                let _ = audio_player.send(AudioCmd::SkipBy(-amount));
+                app.playback = PlaybackState::Playing;
+                update_mpris(mpris, app);
             }
         }
         KeyCode::Char('-') => {
@@ -726,15 +786,17 @@ fn handle_normal_key_event(
         }
         KeyCode::Char('L') => {
             state.pending_key.clear();
-            clear_pending_count(state, app);
-            let secs = settings.controls.scrub_seconds.min(i32::MAX as u64) as i32;
-            let _ = audio_player.send(AudioCmd::SeekBy(secs));
+            let count = state.take_count_or_default() as i64;
+            app.pending_count = None;
+            let step = settings.controls.scrub_seconds.min(i32::MAX as u64) as i64;
+            state.push_scrub_delta(step.saturating_mul(count));
         }
         KeyCode::Char('H') => {
             state.pending_key.clear();
-            clear_pending_count(state, app);
-            let secs = settings.controls.scrub_seconds.min(i32::MAX as u64) as i32;
-            let _ = audio_player.send(AudioCmd::SeekBy(-secs));
+            let count = state.take_count_or_default() as i64;
+            app.pending_count = None;
+            let step = settings.controls.scrub_seconds.min(i32::MAX as u64) as i64;
+            state.push_scrub_delta(-step.saturating_mul(count));
         }
         KeyCode::Char('K') => {
             state.pending_key.clear();

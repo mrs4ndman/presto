@@ -106,6 +106,7 @@ initial_volume_percent = 80
 
 [controls]
 scrub_seconds = 9
+scrub_batch_window_ms = 400
 volume_step_percent = 7
 
 [ui]
@@ -140,6 +141,7 @@ display_separator = "::"
     assert_eq!(s.audio.quit_fade_out_ms, 123);
     assert_eq!(s.audio.initial_volume_percent, 80);
     assert_eq!(s.controls.scrub_seconds, 9);
+    assert_eq!(s.controls.scrub_batch_window_ms, 400);
     assert_eq!(s.controls.volume_step_percent, 7);
     assert!(!s.ui.follow_playback);
     assert!(s.ui.lyrics_enabled);
@@ -204,6 +206,7 @@ fn settings_validate_reports_invalid_values() {
     s.audio.crossfade_steps = 0;
     s.audio.initial_volume_percent = 101;
     s.controls.scrub_seconds = 0;
+    s.controls.scrub_batch_window_ms = (i32::MAX as u64) + 1;
     s.controls.volume_step_percent = 0;
     s.library.extensions = vec!["".to_string()];
     s.library.max_depth = Some(0);
@@ -212,6 +215,7 @@ fn settings_validate_reports_invalid_values() {
     assert!(err.contains("audio.crossfade_steps"));
     assert!(err.contains("audio.initial_volume_percent"));
     assert!(err.contains("controls.scrub_seconds"));
+    assert!(err.contains("controls.scrub_batch_window_ms"));
     assert!(err.contains("controls.volume_step_percent"));
     assert!(err.contains("library.extensions"));
     assert!(err.contains("library.max_depth"));

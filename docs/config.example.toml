@@ -21,6 +21,10 @@ initial_volume_percent = 50
 [controls]
 # `H` / `L` seek step
 scrub_seconds = 5
+# Debounce window to batch rapid `H` / `L` presses into a single seek (ms).
+# Set to 0 to disable batching. 
+# Recommended between 150 and 500ms for it to be less noticeable.
+scrub_batch_window_ms = 250
 # Volume step per keypress (percentage points)
 volume_step_percent = 5
 

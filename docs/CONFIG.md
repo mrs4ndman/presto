@@ -50,6 +50,7 @@ PRESTO__AUDIO__CROSSFADE_MS=0 presto
 ### `[controls]`
 
 - `scrub_seconds` (u64, default `5`)
+- `scrub_batch_window_ms` (u64, default `250`, `0` disables batching)
 - `volume_step_percent` (u8, default `5`)
 
 ### `[playback]`
