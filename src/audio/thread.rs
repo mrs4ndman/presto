@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use rand::prelude::ThreadRng;
 use rand::seq::SliceRandom;
-use rodio::{OutputStreamBuilder, Sink};
+use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player};
 
 use crate::config::AudioSettings;
 use crate::library::Track;
@@ -54,8 +54,7 @@ pub(super) fn spawn_audio_thread(
     audio_settings: AudioSettings,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        let stream =
-            OutputStreamBuilder::open_default_stream().expect("ERR: No audio output device");
+        let stream = DeviceSinkBuilder::open_default_sink().expect("ERR: No audio output device");
         // rodio logs to stderr when OutputStream is dropped. That's useful in debugging,
         // but noisy for a TUI app.
         let mut stream = stream;
@@ -63,7 +62,7 @@ pub(super) fn spawn_audio_thread(
 
         let mut index: Option<usize> = None;
         let mut paused = true;
-        let mut sink: Option<Sink> = None;
+        let mut sink: Option<Player> = None;
 
         // Track start time and accumulated elapsed when paused.
         let mut started_at: Option<Instant> = None;
@@ -96,9 +95,9 @@ pub(super) fn spawn_audio_thread(
         /// Start playback of a specific index and update queue/order tracking.
         fn do_play(
             i: usize,
-            stream: &rodio::OutputStream,
+            stream: &MixerDeviceSink,
             tracks: &Vec<Track>,
-            sink: &mut Option<Sink>,
+            sink: &mut Option<Player>,
             index: &mut Option<usize>,
             paused: &mut bool,
             started_at: &mut Option<Instant>,
@@ -174,7 +173,7 @@ pub(super) fn spawn_audio_thread(
 
         /// Stop playback and reset shared playback state.
         fn do_stop(
-            sink: &mut Option<Sink>,
+            sink: &mut Option<Player>,
             index: &mut Option<usize>,
             paused: &mut bool,
             started_at: &mut Option<Instant>,
@@ -197,7 +196,7 @@ pub(super) fn spawn_audio_thread(
         }
 
         /// Fade the sink to silence over `fade_out_ms` in fixed steps.
-        fn fade_out_sink(sink: &Sink, fade_out_ms: u64, current_volume: f32) {
+        fn fade_out_sink(sink: &Player, fade_out_ms: u64, current_volume: f32) {
             let start_volume = clamp_volume(current_volume);
             if fade_out_ms == 0 {
                 sink.set_volume(0.0);

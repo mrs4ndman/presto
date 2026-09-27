@@ -7,12 +7,16 @@ use std::fs::File;
 use std::io::BufReader;
 use std::time::Duration;
 
-use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::{Decoder, MixerDeviceSink, Player, Source};
 
 use crate::library::Track;
 
 /// Create a paused `Sink` for `track` that starts playback at `start_at`.
-pub(super) fn create_sink_at(handle: &OutputStream, track: &Track, start_at: Duration) -> Sink {
+pub(super) fn create_sink_at(
+    handle: &MixerDeviceSink,
+    track: &Track,
+    start_at: Duration,
+) -> Player {
     let file =
         File::open(&track.path).unwrap_or_else(|_| panic!("failed to open {:?}", track.path));
 
@@ -21,7 +25,7 @@ pub(super) fn create_sink_at(handle: &OutputStream, track: &Track, start_at: Dur
         // `skip_duration` is our seeking primitive; even Duration::ZERO is fine.
         .skip_duration(start_at);
 
-    let sink = Sink::connect_new(handle.mixer());
+    let sink = Player::connect_new(handle.mixer());
     sink.append(source);
     sink.pause();
     sink

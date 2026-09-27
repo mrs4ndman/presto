@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn lyrics_from_tag_prefers_lyrics_key() {
-        let mut tag = Tag::new(TagType::Id3v2);
+        let mut tag = Tag::new(TagType::VorbisComments);
         tag.insert_text(ItemKey::Lyrics, "Line 1\nLine 2".to_string());
         tag.insert_text(ItemKey::UnsyncLyrics, "Fallback".to_string());
 

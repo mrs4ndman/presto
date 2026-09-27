@@ -14,16 +14,16 @@ categories = ["command-line-utilities", "multimedia::audio"]
 [dependencies]
 crossterm = "0.29.0"
 ratatui = "0.30.0"
-rodio = "0.21.1"
+rodio = "0.22.2"
 walkdir = "2.5.0"
 async-io = "2.6.0"
 zbus = { version = "5.13.2", default-features = true }
 zvariant = "5.9.2"
 rand = "0.10"
-lofty = "0.23"
+lofty = "0.25.4"
 config = { version = "0.15.19", features = ["toml"] }
 serde = { version = "1", features = ["derive"] }
-toml = "0.9.12"
+toml = "1.1.6"
 
 [dev-dependencies]
 tempfile = "3"
